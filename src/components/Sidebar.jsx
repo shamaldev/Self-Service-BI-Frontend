@@ -1,5 +1,7 @@
-import { NavLink } from "react-router-dom";
-import { useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import Cookies from "js-cookie";
+import { jwtDecode } from "jwt-decode";
 import {
   Squares2X2Icon,
   ChartBarIcon,
@@ -8,14 +10,63 @@ import {
   ChevronRightIcon,
   UserCircleIcon,
   Cog6ToothIcon,
-  XMarkIcon
+  XMarkIcon,
+  MagnifyingGlassIcon
 } from "@heroicons/react/24/outline";
 
 export default function Sidebar({ isMobile = false, onClose }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [userName, setUserName] = useState("User");
+  const [userRole, setUserRole] = useState("user");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Function to get cookie by name
+    const getCookie = (name) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+      return null;
+    };
+
+    // Function to decode JWT payload
+   const decodeJWT = (token) => {
+  try {
+    if (!token) throw new Error("Token is missing");
+
+    const decoded = jwtDecode(token);
+    console.log("Decoded JWT:", decoded);
+
+    return decoded;
+  } catch (error) {
+    console.error("Error decoding token:", error);
+    return null;
+  }
+};
+
+
+    const accessToken = getCookie("access_token");
+    if (accessToken) {
+      const decoded = decodeJWT(accessToken);
+      
+      
+      if (decoded && decoded.user_id) {
+        setUserName(decoded.user_id);
+        setUserRole(decoded.role || "user")
+      }
+    }
+  }, []);
 
   // Auto-collapse on mobile, but keep desktop state
   const shouldCollapse = isMobile ? false : isCollapsed;
+
+  const handleLogout = () => {
+    // Clear access token cookie manually
+   Cookies.remove("access_token", { path: "/" })
+   localStorage.removeItem("dashboardCache") 
+    // Redirect to login or home
+    navigate("/login");
+  };
 
   return (
     <aside 
@@ -139,6 +190,35 @@ export default function Sidebar({ isMobile = false, onClose }) {
             )}
           </NavLink>
         </div>
+
+        <div className="relative group">
+          <NavLink
+            to="/insights"
+            className={({ isActive }) =>
+              `flex items-center ${shouldCollapse ? 'justify-center' : ''} gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                isActive
+                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md scale-105 hover:from-blue-600 hover:to-blue-700"
+                  : "text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:scale-105"
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <MagnifyingGlassIcon
+                  className={`h-5 w-5 ${
+                    isActive ? "text-white" : "text-gray-500"
+                  }`}
+                />
+                {!shouldCollapse && "Proactive Agent"}
+                {shouldCollapse && !isMobile && (
+                  <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    Proactive Agent
+                  </div>
+                )}
+              </>
+            )}
+          </NavLink>
+        </div>
       </nav>
 
       {/* Persona Settings */}
@@ -149,7 +229,7 @@ export default function Sidebar({ isMobile = false, onClose }) {
         <div className="space-y-3 text-sm bg-gray-50/50 p-3 rounded-xl backdrop-blur-sm">
           <div className="flex flex-col">
             <span className="text-xs text-gray-400">Role</span>
-            <span className="font-semibold text-gray-800">CFO</span>
+            <span className="font-semibold text-gray-800">{userRole}</span>
           </div>
           <div className="flex flex-col">
             <span className="text-xs text-gray-400">Goal</span>
@@ -167,13 +247,13 @@ export default function Sidebar({ isMobile = false, onClose }) {
             <UserCircleIcon className="h-8 w-8 text-gray-600 hover:text-blue-500 transition-colors" />
             {shouldCollapse && !isMobile && (
               <div className="absolute left-full bottom-0 ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                John Smith
+                {userName}
               </div>
             )}
           </div>
           {!shouldCollapse && (
             <div className="flex-1">
-              <h3 className="text-sm font-medium text-gray-800">John Smith</h3>
+              <h3 className="text-sm font-medium text-gray-800">{userName}</h3>
               <p className="text-xs text-gray-500">Financial Director</p>
             </div>
           )}
@@ -183,6 +263,15 @@ export default function Sidebar({ isMobile = false, onClose }) {
             </button>
           )}
         </div>
+        {!shouldCollapse && (
+          <button
+            onClick={handleLogout}
+            className="w-full mt-3 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            <XMarkIcon className="h-4 w-4" />
+            Logout
+          </button>
+        )}
       </div>
     </aside>
   );

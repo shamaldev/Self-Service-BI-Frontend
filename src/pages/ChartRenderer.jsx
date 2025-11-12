@@ -1,237 +1,290 @@
+import { useRef, useState, useCallback, useEffect } from "react";
+import { SparklesIcon } from "@heroicons/react/24/outline";
 
-// src/pages/ChartRenderer.jsx
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-  CartesianGrid,
-  ResponsiveContainer,
-} from "recharts";
-import { HeatMapGrid } from "react-heatmap-grid";
-import React from "react";
+import { getChartConfig } from "../utils/chartConfig";
+import BubbleMapChart from "../components/charts/BubbleMapChart";
+import LineAreaChart from "../components/charts/LineAreaChart";
+import VerticalBarChart from "../components/charts/VerticalBarChart";
+import HorizontalBarChart from "../components/charts/HorizontalBarChart";
+import StackedBarChart from "../components/charts/StackedBarChart";
+import ClusteredBarChart from "../components/charts/ClusteredBarChart";
+import FunnelChart from "../components/charts/FunnelChart";
+import PieChartComponent from "../components/charts/PieChartComponent";
+import ParetoChart from "../components/charts/ParetoChart";
+import LineChartComponent from "../components/charts/LineChartComponent";
+import AreaChartComponent from "../components/charts/AreaChartComponent";
+function ChartRenderer({ kpi, data, chartConfig }) {
+  const containerRef = useRef(null);
+  const resizeTimeoutRef = useRef(null);
+  const prevSizeRef = useRef({ width: 0, height: 0 });
 
-const chartColors = {
-  line: ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#06b6d4"],
-  bar: ["#2563eb", "#7c3aed", "#db2777", "#dc2626", "#059669", "#0891b2"],
-  pie: ["#6366f1", "#a855f7", "#ec4899", "#f97316", "#14b8a6", "#0ea5e9"],
-  funnel: ["#818cf8", "#c084fc", "#f472b6", "#fb923c"],
-  heat: ["#f87171", "#fb923c", "#facc15", "#4ade80", "#60a5fa"],
-};
-
-// Truncate labels
-const truncateLabel = (label, maxLength = 15) => {
-  if (!label) return "";
-  const str = String(label);
-  return str.length > maxLength ? str.substring(0, maxLength) + "..." : str;
-};
-
-// Normalize data
-const normalizeData = (data) =>
-  data.map((row) => {
-    const normalized = {};
-    for (const key in row) {
-      const val = row[key];
-      normalized[key] =
-        typeof val === "string" && !isNaN(val) ? parseFloat(val) : val;
-    }
-    return normalized;
+  const [containerSize, setContainerSize] = useState({
+    width: 800,
+    height: 400,
   });
 
-export default function ChartRenderer({ kpi, data, chartConfig, chartType }) {
-  if (!kpi || !chartConfig)
-    return <div className="text-gray-400 text-sm">Configuration missing</div>;
-  if (!Array.isArray(data) || data.length === 0)
-    return <div className="text-gray-400 text-sm">No data</div>;
+  // ✅ Stable, debounced resize measurement
+  const updateContainerSize = useCallback(() => {
+    if (!containerRef.current) return;
 
-  let normalizedData;
-  try {
-    normalizedData = normalizeData(data);
-  } catch (err) {
-    return <div className="text-red-500 text-sm">Error processing data</div>;
+    const rect = containerRef.current.getBoundingClientRect();
+    const newSize = {
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+
+    // cancel pending debounce
+    if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
+
+    resizeTimeoutRef.current = setTimeout(() => {
+      const prev = prevSizeRef.current;
+      const deltaWidth = Math.abs(newSize.width - prev.width);
+      const deltaHeight = Math.abs(newSize.height - prev.height);
+      const TOLERANCE = 4; // px difference to trigger update
+
+      if (deltaWidth >= TOLERANCE || deltaHeight >= TOLERANCE) {
+        setContainerSize(newSize);
+        prevSizeRef.current = newSize;
+      }
+    }, 300); // 300ms debounce
+  }, []);
+
+  // ✅ ResizeObserver setup
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // initial measure
+    updateContainerSize();
+
+    const resizeObserver = new ResizeObserver(() => updateContainerSize());
+    resizeObserver.observe(containerRef.current);
+    window.addEventListener("resize", updateContainerSize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateContainerSize);
+      if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
+    };
+  }, [updateContainerSize]);
+
+  // ✅ Fallback render states
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400 text-sm bg-gradient-to-br from-gray-50/80 to-gray-100/80 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-sm">
+        <div className="text-center animate-pulse">
+          <SparklesIcon className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+          No data available
+        </div>
+      </div>
+    );
   }
 
-  console.log("Rendering chart:", chartType, {
-    title: kpi.title,
-    x: chartConfig.x_axis_col_name,
-    y: chartConfig.y_axis_col_name,
-    sample: normalizedData[0],
-  });
+  if (!kpi || !kpi.chart_type) {
+    return (
+      <div className="text-gray-400 text-sm bg-gradient-to-br from-gray-50/80 to-gray-100/80 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-sm p-4">
+        Invalid chart configuration
+      </div>
+    );
+  }
 
-  switch (chartType) {
-    case "line_chart":
-      return (
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart
-            data={normalizedData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+  const type = kpi.chart_type.replace(/_/g, "");
+  const config = getChartConfig(type.replace(/chart$/, ""), chartConfig, data);
+
+  // Responsive font sizes
+  const { width: containerWidth, height: containerHeight } = containerSize;
+  const fontSize = containerWidth < 400 ? 9 : containerWidth < 600 ? 10 : 11;
+  const labelFontSize =
+    containerWidth < 400 ? 10 : containerWidth < 600 ? 11 : 12;
+  const showLabels = containerWidth > 400;
+  const showLegend = false;
+
+  try {
+    switch (type) {
+      case "linechart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
           >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              dataKey={chartConfig.x_axis_col_name}
-              label={{
-                value: chartConfig.x_axis_label || chartConfig.x_axis_col_name,
-                position: "insideBottom",
-                offset: -40,
-              }}
-              angle={-45}
-              textAnchor="end"
-              height={60}
-              tickFormatter={(v) => truncateLabel(v, 10)}
+            <LineChartComponent
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+              labelFontSize={labelFontSize}
+              showLabels={showLabels}
             />
-            <YAxis
-              label={{
-                value:
-                  chartConfig.y_axis_label ||
-                  chartConfig.y_axis_col_name?.join(", "),
-                angle: -90,
-                position: "insideLeft",
-              }}
-            />
-            <Tooltip />
-            <Legend />
-            {chartConfig.y_axis_col_name.map((yKey, idx) => (
-              <Line
-                key={idx}
-                type="monotone"
-                dataKey={yKey}
-                stroke={chartColors.line[idx % chartColors.line.length]}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      );
+          </div>
+        );
 
-    case "bar_chart":
-    case "horizontal_bar_chart":
-      return (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart
-            layout={chartType === "horizontal_bar_chart" ? "vertical" : "horizontal"}
-            data={normalizedData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+      case "areachart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
           >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              type={chartType === "horizontal_bar_chart" ? "number" : "category"}
-              dataKey={
-                chartType === "horizontal_bar_chart"
-                  ? null
-                  : chartConfig.x_axis_col_name
-              }
+            <AreaChartComponent
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+              labelFontSize={labelFontSize}
+              showLabels={showLabels}
             />
-            <YAxis
-              type={chartType === "horizontal_bar_chart" ? "category" : "number"}
-              dataKey={
-                chartType === "horizontal_bar_chart"
-                  ? chartConfig.x_axis_col_name
-                  : null
-              }
-            />
-            <Tooltip />
-            <Legend />
-            {chartConfig.y_axis_col_name.map((yKey, idx) => (
-              <Bar
-                key={idx}
-                dataKey={yKey}
-                fill={chartColors.bar[idx % chartColors.bar.length]}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      );
+          </div>
+        );
 
-    case "pie_chart":
-      const pieKey = Array.isArray(chartConfig.y_axis_col_name)
-        ? chartConfig.y_axis_col_name[0]
-        : chartConfig.y_axis_col_name;
-      return (
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={normalizedData}
-              dataKey={pieKey}
-              nameKey={chartConfig.x_axis_col_name}
-              outerRadius={90}
-              label={(entry) =>
-                truncateLabel(entry[chartConfig.x_axis_col_name], 10)
-              }
-            >
-              {normalizedData.map((_, idx) => (
-                <Cell
-                  key={idx}
-                  fill={chartColors.pie[idx % chartColors.pie.length]}
-                />
-              ))}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      );
-
-    case "funnel_chart":
-      // Simulated funnel using vertical BarChart
-      return (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart
-            layout="vertical"
-            data={normalizedData.sort(
-              (a, b) => b[chartConfig.y_axis_col_name[0]] - a[chartConfig.y_axis_col_name[0]]
-            )}
-            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+      case "barchart":
+      case "verticalbarchart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
           >
-            <XAxis type="number" />
-            <YAxis
-              type="category"
-              dataKey={chartConfig.x_axis_col_name}
-              tickFormatter={(v) => truncateLabel(v, 10)}
+            <VerticalBarChart
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+              labelFontSize={labelFontSize}
+              showLabels={showLabels}
             />
-            <Tooltip />
-            <Bar
-              dataKey={chartConfig.y_axis_col_name[0]}
-              fill={chartColors.funnel[0]}
+          </div>
+        );
+
+      case "horizontalbarchart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
+          >
+            <HorizontalBarChart
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
             />
-          </BarChart>
-        </ResponsiveContainer>
-      );
+          </div>
+        );
 
-    case "heat_map":
-      const xLabels = normalizedData.map(
-        (d) => d[chartConfig.x_axis_col_name]
-      );
-      const yLabels = chartConfig.y_axis_col_name;
-      const values = yLabels.map((y) =>
-        normalizedData.map((d) => d[y] || 0)
-      );
+      case "stackedbarchart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
+          >
+            <StackedBarChart
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+              labelFontSize={labelFontSize}
+              showLabels={showLabels}
+            />
+          </div>
+        );
 
-      return (
-        <div className="overflow-x-auto">
-          <HeatMapGrid
-            data={values}
-            xLabels={xLabels}
-            yLabels={yLabels}
-            cellHeight="2rem"
-            cellWidth="2rem"
-            square
-            xLabelsPos="bottom"
-            yLabelsPos="left"
-          />
-        </div>
-      );
+      case "clusteredbarchart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
+          >
+            <ClusteredBarChart
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+              labelFontSize={labelFontSize}
+              showLabels={showLabels}
+            />
+          </div>
+        );
 
-    default:
-      return (
-        <div className="text-gray-500 text-sm">
-          Unsupported chart type: {chartType}
-        </div>
-      );
+      case "piechart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
+          >
+            <PieChartComponent
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+              labelFontSize={labelFontSize}
+              showLabels={showLabels}
+            />
+          </div>
+        );
+
+      case "funnelchart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
+          >
+            <FunnelChart
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+            />
+          </div>
+        );
+
+      case "paretochart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
+          >
+            <ParetoChart
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+              labelFontSize={labelFontSize}
+              showLabels={showLabels}
+            />
+          </div>
+        );
+
+      case "bubblemapchart":
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 w-full h-full min-h-0 min-w-0"
+          >
+            <BubbleMapChart
+              data={data}
+              chartConfig={chartConfig}
+              containerSize={containerSize}
+              fontSize={fontSize}
+            />
+          </div>
+        );
+
+      default:
+        return (
+          <div className="text-gray-500 text-sm p-6 bg-gradient-to-br from-gray-50/80 to-gray-100/80 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-sm">
+            <p className="font-medium mb-2 text-gray-700">
+              Unsupported Chart Type
+            </p>
+            <p className="text-gray-600">
+              "{kpi.chart_type}" not supported yet.
+            </p>
+          </div>
+        );
+    }
+  } catch (error) {
+    console.error("Chart rendering error:", error);
+    return (
+      <div className="text-red-500 text-sm p-6 bg-gradient-to-br from-red-50/80 to-red-100/80 backdrop-blur-sm rounded-xl border border-red-200/50 shadow-sm">
+        Error rendering chart: {error.message}
+      </div>
+    );
   }
 }
+
+export default ChartRenderer;

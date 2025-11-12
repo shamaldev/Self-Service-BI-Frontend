@@ -1,29 +1,44 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import { defineConfig, globalIgnores } from 'eslint/config'
-
-export default defineConfig([
-  globalIgnores(['dist']),
+import eslint from "@eslint/js";
+import reactPlugin from "eslint-plugin-react";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
+import globals from "globals";
+export default [
+  eslint.configs.recommended,
   {
-    files: ['**/*.{js,jsx}'],
-    extends: [
-      js.configs.recommended,
-      reactHooks.configs['recommended-latest'],
-      reactRefresh.configs.vite,
-    ],
+    // React configuration
+    files: ["**/*.{js,jsx}"],
+    plugins: {
+      react: reactPlugin,
+      "react-hooks": reactHooksPlugin,
+    },
     languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        React: "readonly",
+        JSX: "readonly",
+        ...globals.browser, // 👈 this line tells ESLint that fetch, window, document, etc. are defined
+        ...globals.node,
+      },
       parserOptions: {
-        ecmaVersion: 'latest',
-        ecmaFeatures: { jsx: true },
-        sourceType: 'module',
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+    },
+    settings: {
+      react: {
+        version: "detect",
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // React recommended rules
+      ...reactPlugin.configs.recommended.rules,
+      // React Hooks recommended rules
+      ...reactHooksPlugin.configs.recommended.rules,
+      "react/prop-types": "off",
+      // Optional custom overrides
+      // 'react/react-in-jsx-scope': 'error', // Not needed in React 19+
     },
   },
-])
+];
