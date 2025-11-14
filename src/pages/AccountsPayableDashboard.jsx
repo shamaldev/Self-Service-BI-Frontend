@@ -819,10 +819,10 @@ const AccountsPayableDashboard = () => {
             </motion.div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">
-                Proactive Insights Dashboard
+                Proactive Insights HUB
               </h1>
               <p className="text-sm text-indigo-100 opacity-90">
-                AI-powered Accounts Payable • Last updated: {new Date().toLocaleString()}
+                AI-powered Insights • Last updated: {new Date().toLocaleString()}
               </p>
             </div>
           </div>

@@ -209,10 +209,10 @@ export default function Sidebar({ isMobile = false, onClose }) {
                     isActive ? "text-white" : "text-gray-500"
                   }`}
                 />
-                {!shouldCollapse && "Proactive Agent"}
+                {!shouldCollapse && "Alert Monitoring"}
                 {shouldCollapse && !isMobile && (
                   <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    Proactive Agent
+                    Alert Monitor
                   </div>
                 )}
               </>

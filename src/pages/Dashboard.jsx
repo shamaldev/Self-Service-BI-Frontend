@@ -1050,10 +1050,10 @@ export default function Dashboard() {
               {showAlert && (
                 <div className="bg-gradient-to-r from-yellow-50/90 to-orange-50/90 p-4 text-sm text-yellow-800 flex items-center gap-3 border-t border-yellow-200/60 shadow-inner backdrop-blur-sm">
                   <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />
-                  <span className="font-semibold">
+                  {/* <span className="font-semibold">
                     Cost Optimization Alert: Marketing costs increased 18% vs
                     budget. Review recommended.
-                  </span>
+                  </span> */}
                 </div>
               )}
             </div>

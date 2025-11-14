@@ -29,20 +29,27 @@ import {
   ComposedChart,
   Label,
 } from "recharts";
-import axiosInstance from "../config/axios";
+
 import Cookies from "js-cookie";
 
+// Mock axios for demo - replace with your actual implementation
+const axiosInstance = {
+  defaults: {
+    baseURL: "https://c13ce0c86176.ngrok-free.app/api/v1"
+  }
+};
+
 const COLORS = [
-  "#3B82F6",
-  "#8B5CF6",
-  "#10B981",
-  "#F59E0B",
-  "#EF4444",
-  "#EC4899",
-  "#06B6D4",
-  "#6366F1",
-  "#F97316",
-  "#7C3AED",
+  "#6366F1", // Indigo
+  "#8B5CF6", // Purple
+  "#EC4899", // Pink
+  "#14B8A6", // Teal
+  "#F59E0B", // Amber
+  "#EF4444", // Red
+  "#06B6D4", // Cyan
+  "#10B981", // Emerald
+  "#F97316", // Orange
+  "#7C3AED", // Violet
 ];
 
 // ----------------- Utilities -----------------
@@ -430,94 +437,291 @@ function renderChart(chart, height = 420) {
 function ResultDisplay({ result }) {
   if (!result) return null;
   const charts = result.charts || [];
+  const keyInsights = result.key_insights || [];
+  const hasDataQualityAlert = result.data_quality_alert;
+  
   return (
-    <div className="space-y-6">
-      {result.answer && (
-        <div className="p-4 bg-white rounded-2xl shadow border border-gray-100">
-          <h4 className="font-semibold text-indigo-700 flex items-center gap-2 mb-2">
-            <LightBulbIcon className="h-5 w-5" /> Insight
-          </h4>
-          <p className="text-sm text-gray-700">{result.answer}</p>
-        </div>
-      )}
-      {result.executive_summary && (
-        <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl shadow border border-indigo-100">
-          <h4 className="font-semibold text-indigo-700 flex items-center gap-2 mb-2">
-            <SparklesIcon className="h-5 w-5" /> Executive Summary
-          </h4>
-          <p className="text-sm text-gray-700">{result.executive_summary}</p>
-        </div>
-      )}
-      {charts.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {charts.map((c, idx) => (
-            <div
-              key={idx}
-              className="bg-white rounded-2xl p-4 border border-gray-100 shadow hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h5 className="text-sm font-medium text-gray-800">
-                  {c.chart_config.title || `Chart ${idx + 1}`}
-                </h5>
-              </div>
-              <div className="w-full h-[420px]">{renderChart(c, 420)}</div>
+    <div className="space-y-5">
+      {/* Data Quality Alert - CRITICAL */}
+      {hasDataQualityAlert && (
+        <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-red-50 border-l-4 border-amber-500 rounded-xl p-5 shadow-lg">
+          <div className="flex items-start gap-3">
+            <ExclamationTriangleIcon className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-bold text-amber-900 text-base mb-1">
+                {hasDataQualityAlert.headline}
+              </h4>
+              <p className="text-sm text-amber-800 mb-2">
+                {hasDataQualityAlert.details}
+              </p>
+              {hasDataQualityAlert.recommendation && (
+                <div className="bg-white/60 rounded-lg p-3 mt-2">
+                  <p className="text-xs font-medium text-amber-900">
+                    <strong>Recommendation:</strong> {hasDataQualityAlert.recommendation}
+                  </p>
+                </div>
+              )}
             </div>
-          ))}
+          </div>
         </div>
       )}
-      {result.detailed_findings?.length > 0 && (
-        <div className="p-4 bg-white rounded-2xl shadow border border-gray-100">
-          <h4 className="font-semibold text-indigo-700 mb-2 flex items-center gap-2">
-            <ChartBarIcon className="h-5 w-5" /> Detailed Findings
+
+      {/* Executive Summary - Premium Card */}
+      {result.executive_summary && (
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 rounded-2xl shadow-2xl border border-indigo-500/20">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10" />
+          <div className="relative p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-lg flex items-center justify-center shadow-lg">
+                <SparklesIcon className="h-6 w-6 text-white" />
+              </div>
+              <h4 className="text-xl font-bold text-white">Executive Summary</h4>
+            </div>
+            <p className="text-indigo-100 leading-relaxed text-base">
+              {result.executive_summary}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Simple Answer (for non-complex queries) */}
+      {result.answer && !result.executive_summary && (
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5">
+          <div className="flex items-start gap-3">
+            <LightBulbIcon className="h-6 w-6 text-indigo-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-slate-800 text-base mb-2">Analysis Result</h4>
+              <p className="text-slate-700 leading-relaxed">{result.answer}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Key Insights - Card Grid */}
+      {keyInsights.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <ChartBarIcon className="h-6 w-6 text-indigo-600" />
+            Key Insights
           </h4>
-          <div className="space-y-3">
-            {result.detailed_findings.map((f, i) => (
+          <div className="grid grid-cols-1 gap-4">
+            {keyInsights.map((insight, idx) => (
               <div
-                key={i}
-                className="p-3 bg-indigo-50 rounded-lg border-l-4 border-indigo-200"
+                key={idx}
+                className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden hover:shadow-xl transition-shadow"
               >
-                <div className="text-sm font-medium text-gray-800">
-                  {f.claim}
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-500 p-4">
+                  <h5 className="font-bold text-white text-base">
+                    {insight.headline}
+                  </h5>
+                  {insight.quantitative_summary && (
+                    <div className="mt-2 flex items-center gap-4 text-white/90 text-sm">
+                      <span className="font-semibold">
+                        {insight.quantitative_summary.primary_metric}
+                      </span>
+                      <span className="text-white/70">
+                        {insight.quantitative_summary.time_period}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs text-gray-600 mt-1">
-                  <strong>Evidence:</strong> {f.evidence}
-                </div>
-                <div className="text-xs text-gray-700 mt-1 italic">
-                  <strong>Interpretation:</strong> {f.interpretation}
+                <div className="p-4">
+                  <p className="text-slate-700 mb-3 leading-relaxed">
+                    {insight.business_impact}
+                  </p>
+                  
+                  {insight.supporting_evidence?.length > 0 && (
+                    <div className="space-y-2">
+                      {insight.supporting_evidence.map((evidence, eidx) => (
+                        <div
+                          key={eidx}
+                          className="bg-slate-50 rounded-lg p-3 border border-slate-200"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                              {evidence.metric}
+                            </span>
+                            {evidence.confidence && (
+                              <span className="text-xs text-slate-500">
+                                Confidence: {evidence.confidence}%
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-2xl font-bold text-indigo-600 mb-1">
+                            {evidence.value}
+                          </div>
+                          <div className="text-xs text-slate-600">
+                            {evidence.context}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {insight.confidence_score && (
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600 font-medium">Confidence Score</span>
+                        <span className="font-bold text-indigo-600">
+                          {insight.confidence_score}%
+                        </span>
+                      </div>
+                      <div className="mt-1 w-full bg-slate-200 rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all"
+                          style={{ width: `${insight.confidence_score}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
-      {result.recommended_actions?.length > 0 && (
-        <div className="p-4 bg-white rounded-2xl shadow border border-gray-100">
-          <h4 className="font-semibold text-green-700 mb-2 flex items-center gap-2">
-            <CheckCircleIcon className="h-5 w-5" /> Recommended Actions
-          </h4>
-          <ul className="list-inside list-decimal text-sm text-gray-700 space-y-1">
-            {result.recommended_actions.map((a, i) => (
-              <li key={i}>{a}</li>
+
+      {/* Charts - Responsive Grid */}
+      {charts.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="text-lg font-bold text-slate-800">Data Visualizations</h4>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {charts.map((c, idx) => (
+              <div
+                key={idx}
+                className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden hover:shadow-xl transition-all"
+              >
+                <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-200">
+                  <h5 className="text-sm font-semibold text-slate-800">
+                    {c.title || c.chart_config?.title || `Analysis ${idx + 1}`}
+                  </h5>
+                  {c.purpose && (
+                    <span className="text-xs text-slate-500 capitalize">
+                      {c.purpose} Analysis
+                    </span>
+                  )}
+                </div>
+                <div className="p-4">
+                  <div className="w-full h-[380px]">{renderChart(c, 380)}</div>
+                </div>
+                {c.row_count && (
+                  <div className="px-4 pb-3 text-xs text-slate-500">
+                    Based on {c.row_count.toLocaleString()} data points
+                  </div>
+                )}
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
-      {result.suggested_followups?.length > 0 && (
-        <div className="p-4 bg-white rounded-2xl shadow border border-gray-100">
-          <h4 className="font-semibold text-purple-700 mb-2 flex items-center gap-2">
-            <LightBulbIcon className="h-5 w-5" /> Suggested Follow-ups
+
+      {/* Strategic Recommendations */}
+      {result.strategic_recommendations?.length > 0 && (
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl shadow-md border border-emerald-200 p-5">
+          <h4 className="font-bold text-emerald-800 text-base mb-4 flex items-center gap-2">
+            <CheckCircleIcon className="h-6 w-6" />
+            Strategic Recommendations
           </h4>
-          <ul className="text-sm text-gray-700 space-y-1">
-            {result.suggested_followups.map((s, i) => (
-              <li key={i}>{s}</li>
+          <div className="space-y-3">
+            {result.strategic_recommendations.map((rec, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-6 h-6 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="font-semibold text-slate-800 mb-1">
+                      {rec.action}
+                    </h5>
+                    <p className="text-sm text-slate-600 mb-2">
+                      {rec.rationale}
+                    </p>
+                    <div className="flex items-center gap-4 text-xs">
+                      {rec.urgency && (
+                        <span className={`px-2 py-1 rounded-full font-medium ${
+                          rec.urgency === 'immediate' ? 'bg-red-100 text-red-700' :
+                          rec.urgency === 'high' ? 'bg-orange-100 text-orange-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {rec.urgency.toUpperCase()}
+                        </span>
+                      )}
+                      {rec.expected_impact && (
+                        <span className="text-slate-500">
+                          Impact: {rec.expected_impact}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Root Cause Analysis */}
+      {result.root_cause_analysis && (
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl shadow-md border border-purple-200 p-5">
+          <h4 className="font-bold text-purple-800 text-base mb-3">
+            Root Cause Analysis
+          </h4>
+          <div className="space-y-3">
+            <div className="bg-white rounded-lg p-4 border-l-4 border-purple-500">
+              <h5 className="text-sm font-semibold text-slate-800 mb-1">
+                Primary Driver
+              </h5>
+              <p className="text-slate-700">
+                {result.root_cause_analysis.primary_driver}
+              </p>
+            </div>
+            {result.root_cause_analysis.secondary_factors?.length > 0 && (
+              <div className="bg-white rounded-lg p-4">
+                <h5 className="text-sm font-semibold text-slate-800 mb-2">
+                  Contributing Factors
+                </h5>
+                <ul className="space-y-1 text-sm text-slate-700">
+                  {result.root_cause_analysis.secondary_factors.map((factor, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-purple-500 mt-1">•</span>
+                      <span>{factor}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Suggested Actions/Follow-ups */}
+      {(result.recommended_actions?.length > 0 || result.suggested_followups?.length > 0) && (
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5">
+          <h4 className="font-semibold text-slate-800 text-base mb-3 flex items-center gap-2">
+            <LightBulbIcon className="h-5 w-5 text-indigo-600" />
+            Next Steps
+          </h4>
+          <div className="space-y-2">
+            {(result.recommended_actions || result.suggested_followups || []).map((action, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer border border-transparent hover:border-indigo-200"
+              >
+                <div className="flex-shrink-0 w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
+                  {i + 1}
+                </div>
+                <p className="text-sm text-slate-700 flex-1">{action}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
-
 // ----------------- Message -----------------
 function Message({
   from,
