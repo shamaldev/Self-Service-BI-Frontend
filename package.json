@@ -39,6 +39,7 @@
     "react-markdown": "^10.1.0",
     "react-resizable": "^3.0.5",
     "react-router-dom": "^7.9.1",
+    "react-toastify": "^11.0.5",
     "recharts": "^3.2.1",
     "tailwindcss": "^4.1.13",
     "topojson-client": "^3.1.0",

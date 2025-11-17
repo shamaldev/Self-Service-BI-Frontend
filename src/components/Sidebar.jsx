@@ -222,7 +222,7 @@ export default function Sidebar({ isMobile = false, onClose }) {
       </nav>
 
       {/* Persona Settings */}
-      <div className={`border-t border-gray-200/50 px-4 py-4 ${shouldCollapse ? 'hidden' : ''}`}>
+      {/* <div className={`border-t border-gray-200/50 px-4 py-4 ${shouldCollapse ? 'hidden' : ''}`}>
         <p className="text-xs font-semibold text-blue-500 mb-3 tracking-wider">
           PERSONA
         </p>
@@ -238,7 +238,7 @@ export default function Sidebar({ isMobile = false, onClose }) {
             </span>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* User Profile Section */}
       <div className="border-t border-gray-200/50 p-4">
@@ -254,7 +254,7 @@ export default function Sidebar({ isMobile = false, onClose }) {
           {!shouldCollapse && (
             <div className="flex-1">
               <h3 className="text-sm font-medium text-gray-800">{userName}</h3>
-              <p className="text-xs text-gray-500">Financial Director</p>
+              <p className="text-xs text-gray-500">{userRole}</p>
             </div>
           )}
           {!shouldCollapse && (

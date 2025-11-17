@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   AreaChart,
   Area,
-  Line, // Added import for Line component
   XAxis,
   YAxis,
   Tooltip,
@@ -10,8 +9,30 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { motion } from "framer-motion";
-import { formatDate, formatNumber } from "../../utils/utils";
-import { getResponsiveMargin, chartColors } from "../../utils/chartConfig";
+
+// Mock utils for demo
+const formatDate = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+};
+
+const formatNumber = (value, compact = false) => {
+  if (value === null || value === undefined) return "";
+  return new Intl.NumberFormat('en-US', { 
+    notation: compact ? 'compact' : 'standard',
+    maximumFractionDigits: 2 
+  }).format(value);
+};
+
+const getResponsiveMargin = (type, width) => {
+  if (width < 400) return { top: 10, right: 10, left: 0, bottom: 20 };
+  return { top: 20, right: 30, left: 20, bottom: 40 };
+};
+
+const chartColors = {
+  area: ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"],
+};
 
 const AreaChartComponent = ({
   data,
@@ -71,9 +92,6 @@ const AreaChartComponent = ({
         dateA - dateB;
     });
 
-  // Debug log: Check transformed data in console
-  console.log('Transformed Data:', transformedData);
-
   const CustomLegend = () => (
     <div className="flex flex-wrap justify-center gap-3 mt-4">
       {yKeys.map((yKey, i) => {
@@ -111,13 +129,9 @@ const AreaChartComponent = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
     >
-      <div className="flex-1 w-full min-h-[320px]">
+      <div className="flex-1 w-full min-h-0">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={transformedData}
-            margin={margin}
-            isAnimationActive={false} // Disabled to rule out animation issues
-          >
+          <AreaChart data={transformedData} margin={margin}>
             <defs>
               {yKeys.map((yKey, i) => (
                 <linearGradient
@@ -131,7 +145,7 @@ const AreaChartComponent = ({
                   <stop
                     offset="5%"
                     stopColor={chartColors.area[i % chartColors.area.length]}
-                    stopOpacity={0.6}
+                    stopOpacity={0.4}
                   />
                   <stop
                     offset="95%"
@@ -191,8 +205,7 @@ const AreaChartComponent = ({
                 fontSize: fontSize - 1,
               }}
             />
-            {/* Areas for fills only (no stroke to avoid coverage issues) */}
-           {yKeys.map((yKey, i) => {
+            {yKeys.map((yKey, i) => {
               if (!visibleKeys[yKey]) return null;
               const color = chartColors.area[i % chartColors.area.length];
               return (
@@ -201,42 +214,12 @@ const AreaChartComponent = ({
                   type="monotone"
                   dataKey={yKey}
                   stroke={color}
-                  strokeWidth={2.5}
+                  strokeWidth={2}
                   fill={`url(#color${i})`}
                   fillOpacity={1}
-                  dot={false}
-                  activeDot={{ 
-                    r: 5, 
-                    strokeWidth: 2, 
-                    stroke: "#fff", 
-                    fill: color,
-                    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.15))"
-                  }}
-                  isAnimationActive={true}
+                  dot={{ r: 4, fill: color, stroke: "#fff", strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
                   animationDuration={800}
-                  animationEasing="ease-out"
-                  connectNulls={false}
-                />
-              );
-            })}
-            {/* Lines for visible strokes on top of all fills */}
-            {yKeys.map((yKey, i) => {
-              if (!visibleKeys[yKey]) return null;
-              // Temporarily use black for first series to test visibility; revert to color once confirmed
-              const testColor = i === 0 ? '#000' : chartColors.area[i % chartColors.area.length];
-              return (
-                <Line
-                  key={`line-${yKey}`}
-                  type="monotone"
-                  dataKey={yKey}
-                  stroke={testColor}
-                  strokeWidth={4} // Increased for better visibility
-                  strokeOpacity={1} // Explicit full opacity
-                  dot={false}
-                  activeDot={{ r: 6, strokeWidth: 2, stroke: "#fff", fill: testColor }} // Slightly larger for hover test
-                  isAnimationActive={false} // Disabled to rule out animation issues
-                  animationDuration={0}
-                  connectNulls={false}
                 />
               );
             })}

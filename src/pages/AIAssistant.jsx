@@ -29,15 +29,15 @@ import {
   ComposedChart,
   Label,
 } from "recharts";
-
+import { API_BASE_URL } from "../config/axios";
 import Cookies from "js-cookie";
 
 // Mock axios for demo - replace with your actual implementation
-const axiosInstance = {
-  defaults: {
-    baseURL: "https://c13ce0c86176.ngrok-free.app/api/v1"
-  }
-};
+// const axiosInstance = {
+//   defaults: {
+//     baseURL: "https://c13ce0c86176.ngrok-free.app/api/v1"
+//   }
+// };
 
 const COLORS = [
   "#6366F1", // Indigo
@@ -825,7 +825,7 @@ export default function AIAssistant() {
       });
       try {
         const response = await fetch(
-          axiosInstance.defaults.baseURL + "/conversational-bi/query-stream",
+          API_BASE_URL+ "/conversational-bi/query-stream",
           {
             method: "POST",
             headers: {
@@ -837,6 +837,7 @@ export default function AIAssistant() {
               persona: apiConfig.persona,
               catalog: apiConfig.catalog,
               schema: apiConfig.schema,
+              conversation_id:"b4a0bb79-4616-4bc4-978a-9ef5f6c27af1"
             }),
           }
         );

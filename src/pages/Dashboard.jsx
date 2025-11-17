@@ -30,6 +30,10 @@ import {
 } from "@heroicons/react/24/outline";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+// Assuming react-toastify is installed and imported for alerts
+// Import CSS for react-toastify if needed: import "react-toastify/dist/ReactToastify.css";
 const ResponsiveGridLayout = WidthProvider(Responsive);
 const iconMap = {
   dollar: CurrencyDollarIcon,
@@ -103,6 +107,7 @@ const downloadPNG = (elementId, filename) => {
     })
     .catch((error) => {
       console.error("Error capturing PNG:", error);
+      toast.error("Failed to download image. Please try again.");
     });
 };
 const RegenerateModal = React.memo(
@@ -119,39 +124,23 @@ const RegenerateModal = React.memo(
     if (!isOpen) return null;
     return (
       <div
-        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-md transition-opacity duration-300"
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
         onClick={onClose}
       >
         <div
-          className="bg-white rounded-3xl max-w-md w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-fade-in-scale"
+          className="bg-white rounded-3xl max-w-md w-full max-h-[80vh] overflow-hidden shadow-2xl animate-fade-in-scale"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex justify-between items-center p-6 border-b border-gray-100/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <SparklesIcon className="h-5 w-5 text-purple-600" />
-              Regenerate Chart
-            </h2>
-            <button
-              onClick={onClose}
-              className="group relative px-4 py-2 text-gray-500 hover:text-gray-700 font-semibold rounded-xl hover:bg-gray-100/80 backdrop-blur-sm border border-gray-200/50 transition-all duration-300 hover:shadow-md hover:shadow-gray-100/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isRegenerating}
-            >
-              <span className="group-hover:translate-x-1 transition-transform duration-300">
-                Close
-              </span>
-            </button>
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-xl font-bold text-gray-900">Regenerate Chart</h3>
           </div>
-          <div className="p-6 flex-1 flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-2">
-              Describe changes (e.g., "Change to horizontal bar chart")
-            </label>
+          <div className="p-6 space-y-4">
             <textarea
               value={regenPrompt}
               onChange={handlePromptChange}
-              placeholder="Enter your prompt here..."
-              className="w-full p-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-4"
+              placeholder='Describe changes (e.g., "Change to horizontal bar chart")'
+              className="w-full h-24 p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               rows={4}
-              disabled={isRegenerating}
             />
             <button
               onClick={handleRegenerate}
@@ -200,6 +189,8 @@ export default function Dashboard() {
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [currentChartId, setCurrentChartId] = useState(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [freeformMode, setFreeformMode] = useState(true); // Default to true for free rearrangement
+  const [hasGenerated, setHasGenerated] = useState(false); // Flag to control initial layout generation
   const kpiMapRef = useRef(new Map());
   const orderedKpiIdsRef = useRef([]);
   const chartMapRef = useRef(new Map());
@@ -341,7 +332,7 @@ export default function Dashboard() {
       setMessage(item.answer || "Chart regenerated successfully!");
     } catch (error) {
       console.error("Regeneration error:", error);
-      setMessage(`Error regenerating chart: ${error.message}`);
+      toast.error("Failed to regenerate chart. Please try again.");
     } finally {
       setIsRegenerating(false);
       setShowRegenModal(false);
@@ -356,6 +347,7 @@ export default function Dashboard() {
     let subValue = null;
     if (k.sql_error) {
       value = "Error";
+      toast.error("An error occurred while loading KPI data.");
     } else if (cardData) {
       const mainValueKey = Object.keys(cardData).find(
         (key) => key === "current" || key.startsWith("current_")
@@ -403,6 +395,7 @@ export default function Dashboard() {
     setIsGenerating(true);
     setProgress(0);
     setMessage("Initializing...");
+    setHasGenerated(false); // Reset flag
     kpiMapRef.current = new Map();
     orderedKpiIdsRef.current = [];
     chartMapRef.current = new Map();
@@ -435,7 +428,8 @@ export default function Dashboard() {
           let eventType = "message";
           const dataLines = [];
           lines.forEach((line) => {
-            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            if (line.startsWith("event:"))
+              eventType = line.slice(6).trim();
             else if (line.startsWith("data:"))
               dataLines.push(line.slice(5).trim());
           });
@@ -451,7 +445,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Generation error:", error);
-      setMessage(`Error: ${error.message}`);
+      toast.error("Failed to generate dashboard. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -464,7 +458,7 @@ export default function Dashboard() {
         if (data.kpi_cards?.length) {
           data.kpi_cards.forEach((k) => {
             const id =
-              k.title.replace(/\s+/g, "_").toLowerCase() || JSON.stringify(k);
+              k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
             if (!orderedKpiIdsRef.current.includes(id))
               orderedKpiIdsRef.current.push(id);
             let cardData = k.data && k.data.length > 0 ? k.data[0] : null;
@@ -512,7 +506,7 @@ export default function Dashboard() {
         if (data.kpi_cards?.length) {
           data.kpi_cards.forEach((k) => {
             const id =
-              k.title.replace(/\s+/g, "_").toLowerCase() || JSON.stringify(k);
+              k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
             if (!orderedKpiIdsRef.current.includes(id))
               orderedKpiIdsRef.current.push(id);
             let cardData = k.data && k.data.length > 0 ? k.data[0] : null;
@@ -587,10 +581,12 @@ export default function Dashboard() {
           kpi_id: id,
           kpi: item.kpi || kpiMapRef.current.get(id),
           data: item.data || [],
+          error: "An error occurred", // Generic error message
         });
         if (!orderedChartIdsRef.current.includes(id))
           orderedChartIdsRef.current.push(id);
         syncStateFromRefs();
+        toast.error("An error occurred while loading a KPI.");
         if (data.message) setMessage(data.message);
         break;
       }
@@ -625,9 +621,11 @@ export default function Dashboard() {
           syncStateFromRefs();
         }
         setIsGenerating(false);
+        setHasGenerated(true); // Set flag after complete generation
         break;
       case "error":
         setMessage(data.message || "Stream error");
+        toast.error("An error occurred during dashboard generation.");
         setIsGenerating(false);
         console.error("Stream error:", data);
         break;
@@ -655,6 +653,7 @@ export default function Dashboard() {
           kpis: cachedKpis,
           charts: cachedCharts,
           goal: cachedGoal,
+          layouts: cachedLayouts,
         } = parsed;
         setGoal(cachedGoal || goal);
         // Populate refs from cached data
@@ -685,9 +684,15 @@ export default function Dashboard() {
         });
         // Sync to state
         syncStateFromRefs();
+        // Load layouts if available
+        if (cachedLayouts) {
+          setLayouts(cachedLayouts);
+        }
+        setHasGenerated(true); // Assume cached is "generated"
       } catch (e) {
         console.error("Failed to load from cache:", e);
         localStorage.removeItem("dashboardCache");
+        toast.error("Failed to load cached dashboard. Starting fresh.");
       }
     }
   }, [syncStateFromRefs]);
@@ -703,40 +708,48 @@ export default function Dashboard() {
         kpis: kpis.map((k) => ({ ...k })),
         charts: charts.map((c) => ({ ...c, data: c.data ? [...c.data] : [] })),
         goal,
+        layouts, // Save custom layouts
         timestamp: Date.now(),
       };
       localStorage.setItem("dashboardCache", JSON.stringify(cache));
     }
-  }, [isGenerating, progress, kpis, charts, goal]);
+  }, [isGenerating, progress, kpis, charts, goal, layouts]);
+  // Generate initial layouts only after generation completes
   useEffect(() => {
+    if (!hasGenerated || charts.length === 0) return;
     const lg = [];
     const md = [];
     const sm = [];
     const LG_COLS = 12;
     const MD_COLS = 12;
     const SM_COLS = 6;
-    const KPI_WIDTH_LG = 4;
-    const KPI_HEIGHT_LG = 4;
-    const KPI_WIDTH_MD = 4;
-    const KPI_HEIGHT_MD = 4;
-    const KPI_WIDTH_SM = 3;
-    const KPI_HEIGHT_SM = 4;
+    const KPI_WIDTH_LG = 4; // Exactly 3 per row: 12 / 4 = 3
+    const KPI_HEIGHT_LG = 4; // Decreased height for more compact KPI cards
+    const KPI_WIDTH_MD = 4; // Same for md
+    const KPI_HEIGHT_MD = 4; // Decreased height for more compact KPI cards
+    const KPI_WIDTH_SM = 3; // 6 / 3 = 2 per row on sm
+    const KPI_HEIGHT_SM = 4; // Decreased height for more compact KPI cards
     const KPIS_PER_ROW_LG = 3;
     const KPIS_PER_ROW_MD = 3;
     const KPIS_PER_ROW_SM = 2;
-    // Improved uniform chart sizes with taller heights for better aspect ratio
-    const CHART_WIDTH_LG = 6;
-    const CHART_HEIGHT_LG = 8; // Increased for better visualization
+    // Charts: Exactly 2 per row on lg/md
+    const CHART_WIDTH_LG = 6; // 12 / 6 = 2
+    const CHART_HEIGHT_LG = 8; // Reduced height for more compact layout while maintaining good aspect ratio for financial charts
     const CHARTS_PER_ROW_LG = 2;
     const CHART_WIDTH_MD = 6;
-    const CHART_HEIGHT_MD = 8;
+    const CHART_HEIGHT_MD = 8; // Reduced height for more compact layout
     const CHARTS_PER_ROW_MD = 2;
-    const CHART_WIDTH_SM = 6;
-    const CHART_HEIGHT_SM = 8; // Taller for mobile
+    const CHART_WIDTH_SM = 6; // Full width
+    const CHART_HEIGHT_SM = 10; // Reduced height on mobile for better scrolling without excessive vertical space
+    // Relaxed constraints for more control
+    const KPI_MAX_W_LG = 6; // Increased from 4
+    const KPI_MAX_H_LG = 6; // Increased from 5
+    const CHART_MAX_W_LG = 12; // Full width allowed
+    const CHART_MAX_H_LG = 16; // Taller for detailed views
     const cardIds = orderedKpiIdsRef.current.filter(
       (id) => kpiMapRef.current.get(id)?.isKpiCard
     );
-    // KPIs for lg
+    // KPIs for lg: 3 per row
     cardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
@@ -744,14 +757,14 @@ export default function Dashboard() {
         y: Math.floor(i / KPIS_PER_ROW_LG) * KPI_HEIGHT_LG,
         w: KPI_WIDTH_LG,
         h: KPI_HEIGHT_LG,
-        minW: 2,
-        maxW: 4,
-        minH: 3,
-        maxH: 4,
+        minW: 3, // Slightly higher min to prevent overlap/squish
+        maxW: KPI_MAX_W_LG,
+        minH: 3, // Adjusted minH to match decreased height
+        maxH: KPI_MAX_H_LG, // Adjusted maxH to match decreased height
       };
       lg.push(item);
     });
-    // KPIs for md (same as lg)
+    // KPIs for md: same as lg
     cardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
@@ -759,14 +772,14 @@ export default function Dashboard() {
         y: Math.floor(i / KPIS_PER_ROW_MD) * KPI_HEIGHT_MD,
         w: KPI_WIDTH_MD,
         h: KPI_HEIGHT_MD,
-        minW: 2,
-        maxW: 4,
-        minH: 3,
-        maxH: 4,
+        minW: 3,
+        maxW: KPI_MAX_W_LG, // Use same max as lg
+        minH: 3, // Adjusted minH to match decreased height
+        maxH: KPI_MAX_H_LG, // Adjusted maxH to match decreased height
       };
       md.push(item);
     });
-    // KPIs for sm
+    // KPIs for sm: 2 per row
     cardIds.forEach((id, i) => {
       sm.push({
         i: `kpi-${id}`,
@@ -775,52 +788,44 @@ export default function Dashboard() {
         w: KPI_WIDTH_SM,
         h: KPI_HEIGHT_SM,
         minW: 2,
-        maxW: 6,
-        minH: 3,
-        maxH: 5,
+        maxW: 4, // Slightly increased
+        minH: 3, // Adjusted minH to match decreased height
+        maxH: 6, // Increased
       });
     });
-    // Charts start Y for lg/md (shared KPI rows)
-    const chartsStartY_lg_md =
-      Math.ceil(cardIds.length / KPIS_PER_ROW_LG) * KPI_HEIGHT_LG;
-    // Charts for lg
-    let currentY_lg = chartsStartY_lg_md;
-    let currentX_lg = 0;
-    orderedChartIdsRef.current.forEach((id) => {
+    // Charts start after KPIs
+    const chartsStartY_lg_md = Math.ceil(
+      cardIds.length / KPIS_PER_ROW_LG
+    ) * KPI_HEIGHT_LG;
+    // Charts for lg: strictly 2 per row
+    orderedChartIdsRef.current.forEach((id, index) => {
       const w = CHART_WIDTH_LG;
       const h = CHART_HEIGHT_LG;
-      if (currentX_lg + w > LG_COLS) {
-        currentX_lg = 0;
-        currentY_lg += h;
-      }
+      const rowIndex = Math.floor(index / CHARTS_PER_ROW_LG);
+      const colIndex = index % CHARTS_PER_ROW_LG;
+      const currentX_lg = colIndex * w;
+      const currentY_lg = chartsStartY_lg_md + rowIndex * h;
       const item = {
         i: `chart-${id}`,
         x: currentX_lg,
         y: currentY_lg,
         w: w,
         h: h,
-        minW: 4,
-        maxW: LG_COLS,
+        minW: 4, // Slightly lower min for slimmer options
+        maxW: CHART_MAX_W_LG, // Full grid width
         minH: 6,
-        maxH: 12,
+        maxH: CHART_MAX_H_LG, // Much taller allowed
       };
       lg.push(item);
-      currentX_lg += w;
-      if (currentX_lg >= LG_COLS) {
-        currentX_lg = 0;
-        currentY_lg += h;
-      }
     });
-    // Charts for md (similar to lg but adjusted if needed)
-    let currentY_md = chartsStartY_lg_md;
-    let currentX_md = 0;
-    orderedChartIdsRef.current.forEach((id) => {
+    // Charts for md: same logic
+    orderedChartIdsRef.current.forEach((id, index) => {
       const w = CHART_WIDTH_MD;
       const h = CHART_HEIGHT_MD;
-      if (currentX_md + w > MD_COLS) {
-        currentX_md = 0;
-        currentY_md += h;
-      }
+      const rowIndex = Math.floor(index / CHARTS_PER_ROW_MD);
+      const colIndex = index % CHARTS_PER_ROW_MD;
+      const currentX_md = colIndex * w;
+      const currentY_md = chartsStartY_lg_md + rowIndex * h;
       const item = {
         i: `chart-${id}`,
         x: currentX_md,
@@ -828,20 +833,16 @@ export default function Dashboard() {
         w: w,
         h: h,
         minW: 4,
-        maxW: MD_COLS,
+        maxW: CHART_MAX_W_LG,
         minH: 6,
-        maxH: 12,
+        maxH: CHART_MAX_H_LG,
       };
       md.push(item);
-      currentX_md += w;
-      if (currentX_md >= MD_COLS) {
-        currentX_md = 0;
-        currentY_md += h;
-      }
     });
-    // Charts start Y for sm
-    const chartsStartY_sm =
-      Math.ceil(cardIds.length / KPIS_PER_ROW_SM) * KPI_HEIGHT_SM;
+    // Charts for sm: vertical stack, full width
+    const chartsStartY_sm = Math.ceil(
+      cardIds.length / KPIS_PER_ROW_SM
+    ) * KPI_HEIGHT_SM;
     let currentY_sm = chartsStartY_sm;
     orderedChartIdsRef.current.forEach((id) => {
       const w = CHART_WIDTH_SM;
@@ -852,15 +853,15 @@ export default function Dashboard() {
         y: currentY_sm,
         w: w,
         h: h,
-        minW: 4,
-        maxW: SM_COLS,
-        minH: 6,
-        maxH: 12,
+        minW: 5,
+        maxW: 6,
+        minH: 7,
+        maxH: 13,
       });
       currentY_sm += h;
     });
     setLayouts({ lg, md, sm });
-  }, [kpis.length, charts.length]);
+  }, [hasGenerated, kpis.length, charts.length]); // Only regenerate after hasGenerated and lengths stable
   const cfoSuggestions = [
     "Strategic Financial Insights",
     "Spend Trend Analysis",
@@ -883,6 +884,8 @@ export default function Dashboard() {
     orderedChartIdsRef.current = [];
     syncStateFromRefs();
     setResetKey((k) => k + 1);
+    setLayouts({ lg: [], md: [], sm: [] }); // Reset layouts too
+    setHasGenerated(false);
   };
   const handleOpenRegenModal = useCallback((id) => {
     setCurrentChartId(id);
@@ -894,6 +897,38 @@ export default function Dashboard() {
   }, []);
   const handleRegenerate = useCallback((id, prompt) => {
     regenerateChart(id, prompt);
+  }, []);
+  const handleLayoutChange = useCallback((newLayout, allLayouts) => {
+    // Update the current breakpoint's layout (assuming lg for simplicity; extend for others if needed)
+    setLayouts(allLayouts);
+    // Auto-save to localStorage
+    localStorage.setItem('customLayout', JSON.stringify(allLayouts));
+  }, []);
+  const toggleChartSize = useCallback((id) => {
+    setLayouts((prevLayouts) => {
+      const newLg = prevLayouts.lg.map((item) => {
+        if (item.i === `chart-${id}`) {
+          return {
+            ...item,
+            w: item.w === 6 ? 12 : 6,
+            h: item.h === 8 ? 16 : 8,
+          };
+        }
+        return item;
+      });
+      // Mirror to md for consistency
+      const newMd = prevLayouts.md.map((item) => {
+        if (item.i === `chart-${id}`) {
+          return {
+            ...item,
+            w: item.w === 6 ? 12 : 6,
+            h: item.h === 8 ? 16 : 8,
+          };
+        }
+        return item;
+      });
+      return { ...prevLayouts, lg: newLg, md: newMd };
+    });
   }, []);
   const ChartsList = useMemo(
     () =>
@@ -914,10 +949,14 @@ export default function Dashboard() {
                       {title}
                     </h2>
                     {description && (
-                      <div className="relative group/desc flex-shrink-0">
-                        <InformationCircleIcon className="h-4 w-4 text-gray-400 flex-shrink-0 transition-all duration-300 group-hover/desc:scale-110 group-hover/desc:text-indigo-500" />
-                        <div className="invisible group-hover/desc:visible absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gradient-to-r from-gray-900 to-gray-800 text-white text-xs px-3 py-2 rounded-2xl z-[9999] whitespace-pre-wrap max-w-xs shadow-2xl backdrop-blur-sm border border-white/20 transition-all duration-300 opacity-0 group-hover/desc:opacity-100 group-hover/desc:translate-y-2">
-                          {description}
+                      <div className="relative group/desc flex-shrink-0" role="tooltip" aria-label="Chart description">
+                        <InformationCircleIcon className="h-4 w-4 text-gray-400 flex-shrink-0 transition-all duration-300 group-hover/desc:scale-110 group-hover/desc:text-indigo-500 cursor-help" />
+                        <div className="invisible group-hover/desc:visible absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gradient-to-r from-gray-900/95 to-gray-800/95 text-white text-xs px-4 py-3 rounded-2xl z-[9999] whitespace-pre-wrap max-w-md shadow-2xl backdrop-blur-md border border-white/30 transition-all duration-300 opacity-0 group-hover/desc:opacity-100 group-hover/desc:translate-y-1">
+                          {/* Arrow for better UX */}
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                            <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900/95 rotate-180" />
+                          </div>
+                          <p className="relative z-10 leading-relaxed">{description}</p>
                         </div>
                       </div>
                     )}
@@ -952,6 +991,7 @@ export default function Dashboard() {
                         }}
                         className="group relative text-gray-400 hover:text-indigo-500 p-1.5 rounded-xl hover:bg-indigo-50/80 backdrop-blur-sm border border-indigo-200/50 hover:shadow-md hover:shadow-indigo-100/50 transition-all duration-300 active:scale-95"
                         title="View Data"
+                        aria-label="View underlying data"
                       >
                         <MagnifyingGlassIcon className="h-4 w-4" />
                       </button>
@@ -967,6 +1007,7 @@ export default function Dashboard() {
                         }}
                         className="group relative text-gray-400 hover:text-green-500 p-1.5 rounded-xl hover:bg-green-50/80 backdrop-blur-sm border border-green-200/50 hover:shadow-md hover:shadow-green-100/50 transition-all duration-300 active:scale-95"
                         title="Download CSV"
+                        aria-label="Download data as CSV"
                       >
                         <DocumentArrowDownIcon className="h-4 w-4" />
                       </button>
@@ -982,8 +1023,25 @@ export default function Dashboard() {
                         }}
                         className="group relative text-gray-400 hover:text-purple-500 p-1.5 rounded-xl hover:bg-purple-50/80 backdrop-blur-sm border border-purple-200/50 hover:shadow-md hover:shadow-purple-100/50 transition-all duration-300 active:scale-95"
                         title="Download PNG"
+                        aria-label="Download chart as PNG"
                       >
                         <PhotoIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          toggleChartSize(id);
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                        }}
+                        className="group relative text-gray-400 hover:text-blue-500 p-1.5 rounded-xl hover:bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 hover:shadow-md hover:shadow-blue-100/50 transition-all duration-300 active:scale-95"
+                        title="Toggle Size (Compact / Full)"
+                        aria-label="Toggle chart size"
+                      >
+                        <ArrowUpIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={(e) => {
@@ -997,6 +1055,7 @@ export default function Dashboard() {
                         }}
                         className="group relative text-gray-400 hover:text-purple-500 p-1.5 rounded-xl hover:bg-purple-50/80 backdrop-blur-sm border border-purple-200/50 hover:shadow-md hover:shadow-purple-100/50 transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Regenerate with AI"
+                        aria-label="Regenerate chart using AI"
                         disabled={isRegenerating}
                       >
                         {isRegenerating ? (
@@ -1018,6 +1077,8 @@ export default function Dashboard() {
                       e.preventDefault();
                     }}
                     className="group relative text-gray-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md hover:shadow-red-100/50 transition-all duration-300 active:scale-95"
+                    title="Delete Chart"
+                    aria-label="Delete this chart"
                   >
                     <TrashIcon className="h-4 w-4" />
                   </button>
@@ -1030,7 +1091,7 @@ export default function Dashboard() {
                 {chart.error ? (
                   <div className="flex items-center justify-center h-full text-sm text-red-600 bg-gradient-to-br from-red-50/80 to-red-100/80 backdrop-blur-sm p-6 rounded-2xl border border-red-200/50 shadow-sm">
                     <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-                    {chart.error}
+                    An error occurred while loading the chart.
                   </div>
                 ) : (
                   <ErrorBoundary>
@@ -1043,6 +1104,36 @@ export default function Dashboard() {
                       }
                       data={chart.data}
                       chartConfig={chart.chart_config || {}}
+                      // Pass enhanced tooltip config to ChartRenderer if it supports it
+                      tooltipConfig={{
+                        // Example config for improved tooltips in ChartRenderer
+                        // Assume ChartRenderer uses a lib like Recharts/Chart.js and can accept custom tooltip
+                        customTooltip: true,
+                        formatValue: (value, name) => {
+                          // Financial-friendly formatting
+                          if (typeof value === 'number' && isCurrencyKPI(name)) {
+                            return `$${formatNumber(value, true)}`;
+                          }
+                          if (typeof value === 'number') {
+                            return formatNumber(value);
+                          }
+                          if (value instanceof Date) {
+                            return safeFormatDate(value);
+                          }
+                          return value;
+                        },
+                        styles: {
+                          background: 'linear-gradient(to right, rgb(31 41 55 / 0.95), rgb(17 24 39 / 0.95))',
+                          color: 'white',
+                          borderRadius: '12px',
+                          padding: '12px',
+                          boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)',
+                          fontSize: '14px',
+                          maxWidth: '400px',
+                        },
+                        // Add pointer arrow if supported
+                        showArrow: true,
+                      }}
                     />
                   </ErrorBoundary>
                 )}
@@ -1101,6 +1192,20 @@ export default function Dashboard() {
             </button>
             {layouts.lg?.length > 0 && (
               <>
+                <button
+                  onClick={() => setFreeformMode(!freeformMode)}
+                  className={`group relative flex items-center gap-2 px-4 py-3 text-sm font-semibold ${
+                    freeformMode 
+                      ? 'bg-green-100 text-green-700 border border-green-300/60' 
+                      : 'bg-white/90 text-gray-700 border border-gray-200/60'
+                  } rounded-xl hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:ring-offset-2 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 overflow-hidden`}
+                >
+                  <span className={freeformMode ? 'text-green-500' : 'text-gray-400'}>
+                    {freeformMode ? '🆓' : '🔒'}
+                  </span>
+                  <span>{freeformMode ? 'Freeform' : 'Structured'}</span>
+                  <span className="text-xs">(Layout)</span>
+                </button>
                 <button
                   onClick={handleReset}
                   className="group relative flex items-center gap-2 px-4 py-3 text-sm font-semibold text-gray-700 bg-white/90 backdrop-blur-sm border border-gray-200/60 rounded-xl hover:bg-white hover:border-gray-300/80 hover:shadow-xl hover:shadow-indigo-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:ring-offset-2 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 overflow-hidden"
@@ -1210,13 +1315,15 @@ export default function Dashboard() {
             layouts={layouts}
             breakpoints={{ lg: 1200, md: 996, sm: 768 }}
             cols={{ lg: 12, md: 12, sm: 6 }}
-            rowHeight={40}
-            margin={[24, 24]}
-            containerPadding={[24, 24]}
+            rowHeight={45} // Increased for more vertical breathing room and better proportions
+            margin={[20, 30]} // Adjusted margins: tighter horizontal, more vertical for elegant spacing
+            containerPadding={[20, 20]} // Consistent padding
             isDraggable
             isResizable
-            compactType={null}
-            isBounded={false}
+            compactType={freeformMode ? null : "vertical"} // No compaction in freeform for true freedom
+            isBounded={!freeformMode} // Bound to container for polished UX, prevents overflow
+            preventCollision={!freeformMode} // Avoid overlaps during drag/resize for smoother interaction
+            onLayoutChange={handleLayoutChange}
           >
             {kpis
               .filter((k) => k.isKpiCard)
@@ -1239,7 +1346,8 @@ export default function Dashboard() {
                     <ErrorBoundary
                       fallback={
                         <div className="p-6 text-red-600 text-center bg-red-50 rounded-2xl">
-                          KPI Render Error
+                          <ExclamationTriangleIcon className="h-5 w-5 mx-auto mb-2" />
+                          An error occurred while rendering this KPI.
                         </div>
                       }
                     >
@@ -1262,10 +1370,14 @@ export default function Dashboard() {
                                   {kpi.title}
                                 </h3>
                                 {kpi.description && (
-                                  <div className="relative group/kpi-icon mt-2 flex-shrink-0">
+                                  <div className="relative group/kpi-icon mt-2 flex-shrink-0" role="tooltip" aria-label="KPI description">
                                     <InformationCircleIcon className="h-4 w-4 text-gray-400 cursor-help flex-shrink-0 transition-all duration-300 group-hover/kpi-icon:scale-110 group-hover/kpi-icon:text-indigo-500" />
-                                    <div className="invisible group-hover/kpi-icon:visible absolute -top-10 right-0 bg-gradient-to-r from-gray-900 to-gray-800 text-white text-xs px-3 py-2 rounded-2xl z-[9999] whitespace-pre-wrap max-w-xs shadow-2xl backdrop-blur-sm border border-white/20 transition-all duration-300 opacity-0 group-hover/kpi-icon:opacity-100 group-hover/kpi-icon:translate-y-2">
-                                      {kpi.description}
+                                    <div className="invisible group-hover/kpi-icon:visible absolute -top-10 right-0 bg-gradient-to-r from-gray-900/95 to-gray-800/95 text-white text-xs px-4 py-3 rounded-2xl z-[9999] whitespace-pre-wrap max-w-md shadow-2xl backdrop-blur-md border border-white/30 transition-all duration-300 opacity-0 group-hover/kpi-icon:opacity-100 group-hover/kpi-icon:translate-y-2">
+                                      {/* Arrow for better UX */}
+                                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2">
+                                        <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-gray-900/95" />
+                                      </div>
+                                      <p className="relative z-10 leading-relaxed">{kpi.description}</p>
                                     </div>
                                   </div>
                                 )}
@@ -1282,6 +1394,8 @@ export default function Dashboard() {
                                 e.preventDefault();
                               }}
                               className="relative flex-shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all duration-300 p-2 rounded-2xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md hover:shadow-red-100/50"
+                              title="Delete KPI"
+                              aria-label="Delete this KPI"
                             >
                               <TrashIcon className="h-4 w-4" />
                             </button>
@@ -1356,7 +1470,7 @@ export default function Dashboard() {
                             <div className="flex items-center mt-4 text-red-600 text-xs bg-red-50/80 p-3 rounded-2xl border border-red-200/60 backdrop-blur-sm shadow-inner">
                               <ExclamationTriangleIcon className="h-4 w-4 mr-2 flex-shrink-0" />
                               <span className="truncate font-semibold">
-                                {kpi.sql_error}
+                                An error occurred.
                               </span>
                             </div>
                           )}
@@ -1620,6 +1734,18 @@ export default function Dashboard() {
           animation: fade-in-scale 0.3s ease-out;
         }
       `}</style>
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
     </div>
   );
 }

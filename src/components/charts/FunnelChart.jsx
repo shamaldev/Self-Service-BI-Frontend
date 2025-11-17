@@ -2,8 +2,12 @@ import { ResponsiveFunnel } from "@nivo/funnel";
 import { chartColors } from "../../utils/chartConfig";
 import { formatNumber } from "../../utils/utils";
 
-
- const FunnelChart = ({ data, chartConfig, containerSize = { width: 400, height: 300 }, fontSize = 12 }) => {
+const FunnelChart = ({
+  data,
+  chartConfig,
+  containerSize = { width: 400, height: 300 },
+  fontSize = 12,
+}) => {
   const { width: containerWidth } = containerSize;
   const stagesKey = chartConfig?.stages_col_name || "stage";
   const valueKey = chartConfig?.value_col_name || "value";
@@ -23,9 +27,7 @@ import { formatNumber } from "../../utils/utils";
     .map((item) => ({
       id: String(item[stagesKey] || "Unknown"),
       value: parseFloat(item[valueKey]) || 0,
-      label: chartConfig?.stage_label
-        ? String(item[chartConfig.stage_label] || "")
-        : String(item[stagesKey] || "Unknown"),
+      label: `${String(item[stagesKey])}: ${formatNumber(item[valueKey])}`,
     }))
     .filter((item) => item.value > 0);
 
@@ -35,15 +37,12 @@ import { formatNumber } from "../../utils/utils";
     );
 
   return (
-    <div
-      style={{ height: "100%", width: "100%" }}
-      className="w-full h-full"
-    >
+    <div style={{ height: "100%", width: "100%" }} className="w-full h-full">
       <ResponsiveFunnel
         data={funnelData}
         margin={{
           top: containerWidth < 400 ? 20 : 40,
-          right: containerWidth < 400 ? 20 : 40,
+          right: containerWidth < 400 ? 100 : 120, // extra space for legend
           bottom: containerWidth < 400 ? 20 : 40,
           left: containerWidth < 400 ? 20 : 40,
         }}
@@ -55,7 +54,7 @@ import { formatNumber } from "../../utils/utils";
           from: "color",
           modifiers: [
             ["brighter", 1.4],
-            ["opacity", 0.8],
+            ["opacity", 0.9],
           ],
         }}
         beforeSeparatorLength={Math.max(80, containerWidth / 10)}
@@ -64,21 +63,50 @@ import { formatNumber } from "../../utils/utils";
         afterSeparatorOffset={Math.max(10, containerWidth / 60)}
         currentPartSizeExtension={Math.max(10, containerWidth / 80)}
         currentBorderWidth={Math.max(20, containerWidth / 40)}
-        motionConfig="default"
-        enableLabel={containerWidth > 400}
-        label={(part) =>
-          `${part.data.label}: ${formatNumber(part.data.value)}`
-        }
+        motionConfig="gentle"
+        enableLabel={true}
+        label={(part) => part.data.label}
         labelPosition="inside"
-        interpolation="smooth"
+        labelOrientation="horizontal"
+        labelPadding={8}
         theme={{
           labels: {
             text: {
-              fontSize: `${Math.max(10, fontSize - 1)}px`,
+              fontSize: `${Math.max(10, fontSize)}px`,
               fontWeight: 600,
+              fill: "#fff",
+              textShadow: "0 1px 3px rgba(0,0,0,0.6)",
+            },
+          },
+          legends: {
+            text: {
+              fontSize: 12,
+              fill: "#555",
             },
           },
         }}
+        legends={[
+          {
+            anchor: "right", // position of legend
+            direction: "column",
+            translateX: 80, // move away from chart
+            itemWidth: 100,
+            itemHeight: 20,
+            itemDirection: "left-to-right",
+            itemsSpacing: 6,
+            symbolSize: 14,
+            symbolShape: "circle",
+            effects: [
+              {
+                on: "hover",
+                style: {
+                  itemTextColor: "#000",
+                  symbolSize: 16,
+                },
+              },
+            ],
+          },
+        ]}
       />
     </div>
   );
