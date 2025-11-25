@@ -31,27 +31,26 @@ import {
 } from "recharts";
 import { API_BASE_URL } from "../config/axios";
 import Cookies from "js-cookie";
-
+import { useParams } from "react-router-dom";
+import axios from "axios";
 // Mock axios for demo - replace with your actual implementation
 // const axiosInstance = {
-//   defaults: {
-//     baseURL: "https://c13ce0c86176.ngrok-free.app/api/v1"
-//   }
+// defaults: {
+// baseURL: "https://c13ce0c86176.ngrok-free.app/api/v1"
+// }
 // };
-
 const COLORS = [
-  "#6366F1", // Indigo
-  "#8B5CF6", // Purple
-  "#EC4899", // Pink
-  "#14B8A6", // Teal
-  "#F59E0B", // Amber
-  "#EF4444", // Red
-  "#06B6D4", // Cyan
-  "#10B981", // Emerald
-  "#F97316", // Orange
-  "#7C3AED", // Violet
+  "#A5B4FC", // Indigo-300 (lighter)
+  "#C4B5FD", // Purple-300 (lighter)
+  "#FBB6CE", // Pink-300 (lighter)
+  "#6EE7B7", // Teal-300 (lighter)
+  "#FDE68A", // Amber-300 (lighter)
+  "#FCA5A5", // Red-300 (lighter)
+  "#67E8F9", // Cyan-300 (lighter)
+  "#86EFAC", // Emerald-300 (lighter)
+  "#FDBA74", // Orange-300 (lighter)
+  "#C4B5FD", // Violet-300 (lighter)
 ];
-
 // ----------------- Utilities -----------------
 function prettyLabel(k = "") {
   if (!k) return "";
@@ -59,7 +58,6 @@ function prettyLabel(k = "") {
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
 function formatTooltipValue(v) {
   if (v === null || v === undefined) return "-";
   if (typeof v === "number") {
@@ -68,21 +66,45 @@ function formatTooltipValue(v) {
   }
   return String(v);
 }
-
+// NEW: Function to render answer text as pointwise (bullets) if applicable
+function renderAnswer(text) {
+  if (!text) return null;
+  const lines = text.split('\n').filter(l => l.trim());
+  const hasBullets = lines.some(l => l.trim().startsWith('- ') || l.trim().startsWith('* '));
+  if (hasBullets || lines.length > 1) {
+    return (
+      <ul className="space-y-2 ml-4 list-disc list-inside">
+        {lines.map((line, i) => (
+          <li key={i} className="text-slate-700 leading-relaxed">
+            {line.replace(/^- |\*- /, '').trim()}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return <p className="text-slate-700 leading-relaxed">{text}</p>;
+}
 function inferConfig(chart) {
   const data = chart.data || [];
   const cfg = chart.chart_config || {};
+  const chartType = chart.chart_type || (cfg.series ? "line_chart" : "vertical_bar_chart");
   const first = data[0] || {};
   const keys = Object.keys(first);
-
   const stringKeys = keys.filter(
     (k) =>
       typeof first[k] === "string" &&
       new Set(data.map((d) => d[k])).size < Math.max(3, data.length / 2)
   );
   const numericKeys = keys.filter((k) => typeof first[k] === "number");
-
-  let xKey = Array.isArray(cfg.x_axis_col_name) ? cfg.x_axis_col_name[0] : cfg.x_axis_col_name;
+  const isHorizontal = chartType === "horizontal_bar_chart";
+  let xKey, yKeys;
+  if (isHorizontal) {
+    xKey = Array.isArray(cfg.y_axis_col_name) ? cfg.y_axis_col_name[0] : cfg.y_axis_col_name;
+    yKeys = cfg.x_axis_col_name ? [cfg.x_axis_col_name] : null;
+  } else {
+    xKey = Array.isArray(cfg.x_axis_col_name) ? cfg.x_axis_col_name[0] : cfg.x_axis_col_name;
+    yKeys = Array.isArray(cfg.y_axis_col_name) ? cfg.y_axis_col_name : cfg.y_axis_col_name ? [cfg.y_axis_col_name] : null;
+  }
   if (!xKey) {
     const pref = keys.find((k) =>
       ["name", "category", "state", "month", "date", "label"].some((p) =>
@@ -91,15 +113,12 @@ function inferConfig(chart) {
     );
     xKey = pref || stringKeys[0] || keys[0];
   }
-
-  let yKeys = Array.isArray(cfg.y_axis_col_name) ? cfg.y_axis_col_name : cfg.y_axis_col_name ? [cfg.y_axis_col_name] : null;
   if (!yKeys) {
     const candidates = numericKeys.filter((k) => k !== xKey);
     if (candidates.length === 0 && keys.includes("value"))
       candidates.push("value");
     yKeys = candidates.length > 0 ? candidates : ["value"];
   }
-
   const xAxisLabel = cfg.x_axis_label || prettyLabel(xKey);
   const yAxisLabel =
     cfg.y_axis_label ||
@@ -108,10 +127,8 @@ function inferConfig(chart) {
       : prettyLabel(yKeys?.join(", ")));
   const seriesKey =
     cfg.series || cfg.cluster_by || cfg.stack_by || cfg.color_by || null;
-
   return { xKey, yKeys, xAxisLabel, yAxisLabel, seriesKey, config: cfg };
 }
-
 function pivotLongToWide(data, xKey, seriesKey, valueKey) {
   const uniqueX = [...new Set(data.map((d) => d[xKey]))];
   const uniqueSeries = [...new Set(data.map((d) => d[seriesKey]))];
@@ -130,16 +147,19 @@ function pivotLongToWide(data, xKey, seriesKey, valueKey) {
     return row;
   });
 }
-
 // ----------------- Chart Renderer -----------------
 function renderChart(chart, height = 420) {
   let data = Array.isArray(chart.data) ? chart.data.slice() : [];
-  const chartType =
+  let chartType =
     chart.chart_type ||
     (chart.chart_config?.series ? "line_chart" : "vertical_bar_chart");
+  // NEW: Detect pareto if cumulative_line is derived
+  const cfg = chart.chart_config || {};
+  if (!chartType && cfg.cumulative_line === "derived") {
+    chartType = "pareto_chart";
+  }
   const { xKey, yKeys, xAxisLabel, yAxisLabel, seriesKey, config } =
     inferConfig(chart);
-
   const probableValueKey =
     (config.y_axis_col_name &&
       (Array.isArray(config.y_axis_col_name)
@@ -148,7 +168,6 @@ function renderChart(chart, height = 420) {
     Object.keys(data[0] || {}).find(
       (k) => typeof (data[0] || {})[k] === "number"
     );
-
   if (seriesKey && probableValueKey && data[0] && seriesKey in data[0]) {
     data = pivotLongToWide(data, xKey, seriesKey, probableValueKey);
     const generatedSeries = [...new Set(chart.data.map((d) => d[seriesKey]))];
@@ -167,7 +186,6 @@ function renderChart(chart, height = 420) {
       height
     );
   }
-
   const finalYKeysRaw =
     (chart.chart_config && chart.chart_config._inferred_y_keys) || yKeys;
   const finalYKeys = (
@@ -181,7 +199,24 @@ function renderChart(chart, height = 420) {
     finalYKeys.some((k) => numericCandidates.includes(k))
       ? finalYKeys.filter((k) => numericCandidates.includes(k))
       : numericCandidates.slice(0, 4);
-
+  
+  // FIXED: Process data for Pareto chart - create new objects to avoid read-only errors
+  let processedData = data;
+  if (chartType === "pareto_chart") {
+    const primaryKey = safeYKeys[0];
+    if (primaryKey && processedData.length > 0) {
+      processedData = [...processedData].sort((a, b) => (b[primaryKey] || 0) - (a[primaryKey] || 0));
+      let runningSum = 0;
+      const totalSum = processedData.reduce((sum, d) => sum + (d[primaryKey] || 0), 0);
+      processedData = processedData.map(d => {
+        runningSum += (d[primaryKey] || 0);
+        return {
+          ...d,
+          cumulative: totalSum > 0 ? Math.round((runningSum / totalSum) * 100 * 100) / 100 : 0 // Percentage with 2 decimals
+        };
+      });
+    }
+  }
   const XLabel = ({ label }) => (
     <Label
       value={label}
@@ -198,7 +233,15 @@ function renderChart(chart, height = 420) {
       style={{ textAnchor: "middle", fill: "#374151", fontSize: 12 }}
     />
   );
-
+  // NEW: Right YAxis label for Pareto
+  const RightYLabel = ({ label }) => (
+    <Label
+      value={label}
+      angle={90}
+      position="insideRight"
+      style={{ textAnchor: "middle", fill: "#374151", fontSize: 12 }}
+    />
+  );
   if (chartType === "pie_chart") {
     const categoryKey = config.category_col_name || xKey || "name";
     const valueKey = config.value_col_name || safeYKeys[0] || "value";
@@ -237,7 +280,6 @@ function renderChart(chart, height = 420) {
       </ResponsiveContainer>
     );
   }
-
   if (
     [
       "vertical_bar_chart",
@@ -271,13 +313,15 @@ function renderChart(chart, height = 420) {
           <CartesianGrid strokeDasharray="3 3" stroke="#E6E9EE" />
           {horizontal ? (
             <>
-              <XAxis type="number" tick={{ fontSize: 12, fill: "#374151" }} />
+              <XAxis type="number" tick={{ fontSize: 12, fill: "#374151" }}>
+                {xAxisLabel && <YLabel label={xAxisLabel} />}
+              </XAxis>
               <YAxis
                 type="category"
                 dataKey={xKey}
                 tick={{ fontSize: 12, fill: "#374151" }}
               >
-                {xAxisLabel && <XLabel label={xAxisLabel} />}
+                {yAxisLabel && <XLabel label={yAxisLabel} />}
               </YAxis>
             </>
           ) : (
@@ -312,7 +356,6 @@ function renderChart(chart, height = 420) {
       </ResponsiveContainer>
     );
   }
-
   if (chartType === "line_chart" || chartType === "line_area_chart") {
     const isArea = chartType === "line_area_chart";
     const margin = { top: 18, right: 24, left: 18, bottom: 64 };
@@ -377,7 +420,6 @@ function renderChart(chart, height = 420) {
       </ResponsiveContainer>
     );
   }
-
   if (chartType === "pareto_chart") {
     const primary = safeYKeys[0];
     if (!primary)
@@ -389,7 +431,7 @@ function renderChart(chart, height = 420) {
     const margin = { top: 18, right: 28, left: 18, bottom: 64 };
     return (
       <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={data} margin={margin}>
+        <ComposedChart data={processedData} margin={margin}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E6E9EE" />
           <XAxis dataKey={xKey} tick={{ fontSize: 12, fill: "#374151" }}>
             {xAxisLabel && <XLabel label={xAxisLabel} />}
@@ -397,11 +439,15 @@ function renderChart(chart, height = 420) {
           <YAxis yAxisId="left" tick={{ fontSize: 12, fill: "#374151" }}>
             {yAxisLabel && <YLabel label={yAxisLabel} />}
           </YAxis>
+          {/* UPDATED: Added label for right axis */}
           <YAxis
             yAxisId="right"
             orientation="right"
             tick={{ fontSize: 12, fill: "#374151" }}
-          />
+            domain={[0, 100]}
+          >
+            <RightYLabel label="Cumulative %" />
+          </YAxis>
           <Tooltip formatter={formatTooltipValue} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar
@@ -412,11 +458,12 @@ function renderChart(chart, height = 420) {
             barSize={32}
             animationDuration={700}
           />
+          {/* UPDATED: Name to "Cumulative %" */}
           <Line
             yAxisId="right"
             type="monotone"
             dataKey="cumulative"
-            name="Cumulative"
+            name="Cumulative %"
             stroke={COLORS[3]}
             strokeWidth={2.4}
             animationDuration={900}
@@ -425,21 +472,18 @@ function renderChart(chart, height = 420) {
       </ResponsiveContainer>
     );
   }
-
   return (
     <div className="text-gray-400 italic p-4">
       Unsupported chart type: {chartType}
     </div>
   );
 }
-
 // ----------------- ResultDisplay -----------------
-function ResultDisplay({ result }) {
+function ResultDisplay({ result, onFollowUpClick }) {
   if (!result) return null;
   const charts = result.charts || [];
   const keyInsights = result.key_insights || [];
   const hasDataQualityAlert = result.data_quality_alert;
-  
   return (
     <div className="space-y-5">
       {/* Data Quality Alert - CRITICAL */}
@@ -465,7 +509,6 @@ function ResultDisplay({ result }) {
           </div>
         </div>
       )}
-
       {/* Executive Summary - Premium Card */}
       {result.executive_summary && (
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 rounded-2xl shadow-2xl border border-indigo-500/20">
@@ -477,13 +520,12 @@ function ResultDisplay({ result }) {
               </div>
               <h4 className="text-xl font-bold text-white">Executive Summary</h4>
             </div>
-            <p className="text-indigo-100 leading-relaxed text-base">
-              {result.executive_summary}
-            </p>
+            <div className="text-indigo-100 leading-relaxed text-base">
+              {renderAnswer(result.executive_summary)}
+            </div>
           </div>
         </div>
       )}
-
       {/* Simple Answer (for non-complex queries) */}
       {result.answer && !result.executive_summary && (
         <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5">
@@ -491,12 +533,11 @@ function ResultDisplay({ result }) {
             <LightBulbIcon className="h-6 w-6 text-indigo-600 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-semibold text-slate-800 text-base mb-2">Analysis Result</h4>
-              <p className="text-slate-700 leading-relaxed">{result.answer}</p>
+              {renderAnswer(result.answer)}
             </div>
           </div>
         </div>
       )}
-
       {/* Key Insights - Card Grid */}
       {keyInsights.length > 0 && (
         <div className="space-y-4">
@@ -529,7 +570,7 @@ function ResultDisplay({ result }) {
                   <p className="text-slate-700 mb-3 leading-relaxed">
                     {insight.business_impact}
                   </p>
-                  
+           
                   {insight.supporting_evidence?.length > 0 && (
                     <div className="space-y-2">
                       {insight.supporting_evidence.map((evidence, eidx) => (
@@ -557,7 +598,7 @@ function ResultDisplay({ result }) {
                       ))}
                     </div>
                   )}
-                  
+           
                   {insight.confidence_score && (
                     <div className="mt-3 pt-3 border-t border-slate-200">
                       <div className="flex items-center justify-between text-xs">
@@ -580,7 +621,6 @@ function ResultDisplay({ result }) {
           </div>
         </div>
       )}
-
       {/* Charts - Responsive Grid */}
       {charts.length > 0 && (
         <div className="space-y-4">
@@ -614,7 +654,6 @@ function ResultDisplay({ result }) {
           </div>
         </div>
       )}
-
       {/* Strategic Recommendations */}
       {result.strategic_recommendations?.length > 0 && (
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl shadow-md border border-emerald-200 p-5">
@@ -662,7 +701,6 @@ function ResultDisplay({ result }) {
           </div>
         </div>
       )}
-
       {/* Root Cause Analysis */}
       {result.root_cause_analysis && (
         <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl shadow-md border border-purple-200 p-5">
@@ -696,7 +734,6 @@ function ResultDisplay({ result }) {
           </div>
         </div>
       )}
-
       {/* Suggested Actions/Follow-ups */}
       {(result.recommended_actions?.length > 0 || result.suggested_followups?.length > 0) && (
         <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5">
@@ -709,11 +746,12 @@ function ResultDisplay({ result }) {
               <div
                 key={i}
                 className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer border border-transparent hover:border-indigo-200"
+                onClick={() => onFollowUpClick(action?.action || action)}
               >
                 <div className="flex-shrink-0 w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
                   {i + 1}
                 </div>
-                <p className="text-sm text-slate-700 flex-1">{action}</p>
+                <p className="text-sm text-slate-700 flex-1">{action?.action || action}</p>
               </div>
             ))}
           </div>
@@ -730,6 +768,7 @@ function Message({
   isTyping = false,
   progress = null,
   result = null,
+  onFollowUpClick,
 }) {
   const isAI = from === "ai";
   return (
@@ -745,12 +784,12 @@ function Message({
           </div>
         </div>
       )}
-      <div className="flex flex-col max-w-4xl w-full">
+      <div className="flex flex-col max-w-xl w-full">
         <div
           className={`px-5 py-4 rounded-2xl transition-all duration-300 shadow-md ${
             isAI
               ? "bg-white border border-gray-100"
-              : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+              : "bg-gradient-to-r from-indigo-400 to-purple-400 text-white"
           }`}
         >
           {isTyping ? (
@@ -769,7 +808,7 @@ function Message({
               </div>
             </div>
           ) : result ? (
-            <ResultDisplay result={result} />
+            <ResultDisplay result={result} onFollowUpClick={onFollowUpClick} />
           ) : (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
               {text}
@@ -786,37 +825,144 @@ function Message({
     </div>
   );
 }
-
 // ----------------- Main -----------------
 export default function AIAssistant() {
+  const { convId } = useParams();
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentProgress, setCurrentProgress] = useState(null);
   const [hasProcessedUrlQuery, setHasProcessedUrlQuery] = useState(false);
+  const [conversationId, setConversationId] = useState(convId || null);
   const token = Cookies.get("access_token");
-  const [messages, setMessages] = useState([
-    {
-      from: "ai",
-      text: "👋 Hello! I'm your AI BI Assistant. What business insight can I help you uncover today?",
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const chatEndRef = useRef(null);
   const [apiConfig] = useState({
     catalog: "finance_fusion_catalog",
     schema: "finance_fusion_catalog",
     persona: "CFO",
   });
-
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentProgress]);
-
+  // Clear state and set conversationId when convId changes
+  useEffect(() => {
+    setConversationId(convId || null);
+    if (!convId) {
+      setMessages([]);
+      setLoadingHistory(false);
+    }
+  }, [convId]);
+  // Load conversation history if convId present
+  useEffect(() => {
+    if (!convId) return;
+    setLoadingHistory(true);
+    const fetchConversation = async () => {
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/bi-history/conversations/${convId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "ngrok-skip-browser-warning": "true",
+            },
+          }
+        );
+        const { queries } = response.data;
+        const historicalMessages = [];
+        queries.forEach((query) => {
+          // User message
+          historicalMessages.push({
+            from: "user",
+            text: query.query_text,
+            timestamp: new Date(query.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          });
+          // AI response
+          let result = null;
+          if (query.simple_result) {
+            result = {
+              answer: query.simple_result.answer,
+              suggested_followups: query.simple_result.suggested_followups,
+            };
+            // Handle chart if present
+            if (query.simple_result.chart_config && query.simple_result.data) {
+              const inferredType =
+                query.simple_result.chart_type ||
+                (query.simple_result.chart_config.series
+                  ? "line_chart"
+                  : Array.isArray(query.simple_result.chart_config.y_axis_col_name) &&
+                    query.simple_result.chart_config.y_axis_col_name.length > 1
+                  ? "stacked_bar_chart"
+                  : "vertical_bar_chart");
+              result.charts = [{
+                title: query.simple_result.chart_config.title || "Analysis Chart",
+                chart_type: inferredType,
+                data: query.simple_result.data,
+                chart_config: query.simple_result.chart_config,
+              }];
+            }
+          } else if (query.complex_result) {
+            result = { ...query.complex_result };
+            if (query.charts && query.charts.length > 0) {
+              result.charts = query.charts;
+            }
+            // Map recommended_actions to suggested_followups if needed
+            if (result.recommended_actions) {
+              result.suggested_followups = result.recommended_actions;
+              delete result.recommended_actions;
+            }
+          }
+          historicalMessages.push({
+            from: "ai",
+            result,
+            timestamp: new Date(query.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          });
+        });
+        setMessages(historicalMessages);
+      } catch (error) {
+        console.error("Error fetching conversation:", error);
+        // Fallback to greeting or error message
+        setMessages([{
+          from: "ai",
+          text: "Unable to load conversation history. Please try again.",
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        }]);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    fetchConversation();
+  }, [convId, token]);
+  // Initial greeting for new conversations
+  useEffect(() => {
+    if (convId) return; // Skip greeting if loading history
+    if (messages.length === 0 && !loadingHistory) {
+      setMessages([{
+        from: "ai",
+        text: "👋 Hello! I'm your AI BI Assistant. What business insight can I help you uncover today?",
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      }]);
+    }
+  }, [convId, loadingHistory, messages.length]);
   const sendQuery = useCallback(
     async (text) => {
+      if (!conversationId) {
+        // For new conversation, you may need to create one first or let backend handle
+        // For now, use a placeholder; ideally generate UUID
+        console.warn("No conversation ID; backend should create one");
+      }
       setIsLoading(true);
       setCurrentProgress({
         message: "Starting analysis...",
@@ -825,7 +971,7 @@ export default function AIAssistant() {
       });
       try {
         const response = await fetch(
-          API_BASE_URL+ "/conversational-bi/query-stream",
+          `${API_BASE_URL}/conversational-bi/query-stream`,
           {
             method: "POST",
             headers: {
@@ -837,7 +983,7 @@ export default function AIAssistant() {
               persona: apiConfig.persona,
               catalog: apiConfig.catalog,
               schema: apiConfig.schema,
-              conversation_id:"b4a0bb79-4616-4bc4-978a-9ef5f6c27af1"
+              conversation_id: conversationId || null, // Use convId or placeholder
             }),
           }
         );
@@ -990,9 +1136,22 @@ export default function AIAssistant() {
         setIsLoading(false);
       }
     },
-    [token, apiConfig]
+    [token, apiConfig, conversationId]
   );
-
+  // NEW: Handler for follow-up clicks - auto-sends as next question
+  const handleFollowUpClick = useCallback((text) => {
+    if (!text.trim() || isLoading) return;
+    const userMessage = {
+      from: "user",
+      text,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    sendQuery(text);
+  }, [isLoading, sendQuery]);
   const handleSendMessage = () => {
     const text = inputValue;
     if (!text.trim() || isLoading) return;
@@ -1008,21 +1167,16 @@ export default function AIAssistant() {
     setInputValue("");
     sendQuery(text);
   };
-
   // FIXED: Added hasProcessedUrlQuery flag to prevent infinite loop
   useEffect(() => {
     // Only run once when component mounts and hasn't processed URL yet
     if (hasProcessedUrlQuery) return;
-
     const params = new URLSearchParams(window.location.search);
     const query = params.get("query");
     const responseKey = params.get("response_key");
-
     if (!query) return; // No query in URL, nothing to do
-
     // Mark as processed immediately to prevent re-runs
     setHasProcessedUrlQuery(true);
-
     const userMessage = {
       from: "user",
       text: query,
@@ -1032,7 +1186,6 @@ export default function AIAssistant() {
       }),
     };
     setMessages((prev) => [...prev, userMessage]);
-
     if (responseKey) {
       // Use cached response from localStorage - no API call
       try {
@@ -1040,7 +1193,6 @@ export default function AIAssistant() {
         if (cachedData) {
           const item = JSON.parse(cachedData);
           let finalResult = { ...item };
-
           // Normalize simple question format
           if (
             finalResult.intent === "simple_question" &&
@@ -1070,13 +1222,11 @@ export default function AIAssistant() {
             delete finalResult.data;
             delete finalResult.sql_query;
           }
-
           // Map suggested_actions to suggested_followups for UI
           if (finalResult.suggested_actions) {
             finalResult.suggested_followups = finalResult.suggested_actions;
             delete finalResult.suggested_actions;
           }
-
           // Add to messages as completed AI response
           setMessages((prev) => [
             ...prev,
@@ -1089,7 +1239,6 @@ export default function AIAssistant() {
               }),
             },
           ]);
-
           // Clean up cache after use
           localStorage.removeItem(responseKey);
           return; // Exit early - no API call
@@ -1099,11 +1248,19 @@ export default function AIAssistant() {
         // Fallback to API if cache invalid
       }
     }
-
     // Fallback: Call the API via sendQuery if no valid cache
     sendQuery(query);
   }, [hasProcessedUrlQuery, sendQuery]); // Only depend on the flag and sendQuery
-
+  if (loadingHistory) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <ArrowPathIcon className="h-8 w-8 animate-spin mx-auto mb-4 text-indigo-600" />
+          <p className="text-slate-600">Loading conversation history...</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 flex flex-col">
       <div className="max-w-6xl w-full mx-auto p-6 flex flex-col flex-grow">
@@ -1119,7 +1276,7 @@ export default function AIAssistant() {
         {/* Chat container */}
         <div className="flex-1 backdrop-blur-xl bg-white/60 border border-white/40 rounded-2xl p-5 shadow-xl overflow-y-auto space-y-4">
           {messages.map((msg, idx) => (
-            <Message key={idx} {...msg} />
+            <Message key={idx} {...msg} onFollowUpClick={handleFollowUpClick} />
           ))}
           {isLoading && currentProgress && (
             <Message from="ai" isTyping progress={currentProgress} />

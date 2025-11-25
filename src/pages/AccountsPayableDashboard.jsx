@@ -48,9 +48,7 @@ const AccountsPayableDashboard = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState({ message: "", type: "", visible: false });
   const [showMoreRows, setShowMoreRows] = useState({}); // Track show more per finding
-
   const ITEMS_PER_PAGE = 5;
-
   const fetchData = async () => {
     setRefreshing(true);
     setError(null);
@@ -75,20 +73,16 @@ const AccountsPayableDashboard = () => {
       setRefreshing(false);
     }
   };
-
   useEffect(() => {
     fetchData();
   }, []);
-
   const handleRefresh = useCallback(() => {
     fetchData();
   }, []);
-
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type, visible: true });
     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 3000);
   }, []);
-
   const tabConfigs = [
     { id: "all", label: "All Insights", icon: Activity },
     {
@@ -122,7 +116,6 @@ const AccountsPayableDashboard = () => {
       tool: "find_invoices_pending_too_long",
     },
   ];
-
   const severityStyles = useMemo(
     () => ({
       Critical: {
@@ -240,18 +233,15 @@ const AccountsPayableDashboard = () => {
     }),
     []
   );
-
   const getNumberFromSummary = (sum) => {
     if (!sum) return "—";
     const match = sum.toString().match(/(\d+)/);
     return match ? match[1] : "—";
   };
-
   const normalizeSeverity = (rawSev) => {
     if (!rawSev) return "Low";
     return rawSev.charAt(0).toUpperCase() + rawSev.slice(1).toLowerCase();
   };
-
   // Aggregate severity counts across all findings
   const severityCounts = useMemo(() => {
     const counts = { Critical: 0, High: 0, Medium: 0, Low: 0 };
@@ -263,9 +253,7 @@ const AccountsPayableDashboard = () => {
     });
     return counts;
   }, [data1.agent_findings]);
-
   const severityOrder = ["Critical", "Medium", "Low"];
-
   // Filtered findings based on tab, search, severity
   const filteredFindings = useMemo(() => {
     let findings = data1.agent_findings || [];
@@ -294,22 +282,18 @@ const AccountsPayableDashboard = () => {
       return searchText.includes(q);
     });
   }, [data1.agent_findings, activeTab, globalSearch, severityFilter]);
-
   // Paginated findings
   const paginatedFindings = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredFindings.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredFindings, currentPage]);
-
   const totalPages = Math.ceil(filteredFindings.length / ITEMS_PER_PAGE);
-
   const formatCurrency = (n) =>
     new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
       maximumFractionDigits: 2,
     }).format(Number(n));
-
   const downloadCSV = useCallback((content, filename) => {
     const csv = [
       Object.keys(content[0] || {}).join(","),
@@ -324,13 +308,11 @@ const AccountsPayableDashboard = () => {
     window.URL.revokeObjectURL(url);
     showToast("Data exported successfully", "success");
   }, [showToast]);
-
   const renderMarkdownSummary = (text) =>
     text
       .replace(/\n/g, "<br>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>");
-
   const SkeletonCard = () => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -355,7 +337,6 @@ const AccountsPayableDashboard = () => {
       </div>
     </motion.div>
   );
-
   const FindingCard = ({ finding, index }) => {
     const toolName = finding.tool_name;
     const config = tabConfigs.find((t) => t.tool === toolName);
@@ -366,11 +347,10 @@ const AccountsPayableDashboard = () => {
     const isExpanded = expandedFindings.has(index);
     const content = finding.raw_data || [];
     const structured = finding.structured_summary || {};
-
     const keyFindings = Array.isArray(structured.key_Findings)
       ? structured.key_Findings
       : [];
-    
+   
     const recActions = Array.isArray(structured.recommended_actions)
       ? structured.recommended_actions
       : typeof structured.recommended_actions === "string"
@@ -379,7 +359,6 @@ const AccountsPayableDashboard = () => {
           .map((a) => a.trim())
           .filter((a) => a)
       : [];
-
     const summaryText = useMemo(() => {
       if (!structured.alert_title) return "";
       let text = `**${structured.alert_title}**`;
@@ -400,7 +379,6 @@ const AccountsPayableDashboard = () => {
       }
       return text;
     }, [structured, keyFindings, recActions]);
-
     const filteredContent = useMemo(() => {
       if (!content || content.length === 0) return [];
       const q = globalSearch.trim().toLowerCase();
@@ -411,7 +389,6 @@ const AccountsPayableDashboard = () => {
         )
       );
     }, [content, globalSearch]);
-
     const toggleExpanded = () => {
       setExpandedFindings((prev) => {
         const newSet = new Set(prev);
@@ -423,12 +400,10 @@ const AccountsPayableDashboard = () => {
         return newSet;
       });
     };
-
     const handleSort = useCallback((key) => {
       // Implement sorting logic here if needed
       console.log("Sort by", key);
     }, []);
-
     const severityBadge = (
       <motion.div
         whileHover={{ scale: 1.05 }}
@@ -437,17 +412,13 @@ const AccountsPayableDashboard = () => {
         {rawSev}
       </motion.div>
     );
-
     const handleExport = () => {
       downloadCSV(filteredContent, `${toolName.replace(/_/g, "-")}-data.csv`);
     };
-
     const toggleShowMore = (findingIndex) => {
       setShowMoreRows(prev => ({ ...prev, [findingIndex]: !prev[findingIndex] }));
     };
-
     const displayRows = showMoreRows[index] ? filteredContent : filteredContent.slice(0, 10);
-
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -499,7 +470,6 @@ const AccountsPayableDashboard = () => {
             </motion.button>
           </div>
         </motion.div>
-
         {/* Collapsible Content */}
         <AnimatePresence>
           {isExpanded && (
@@ -542,7 +512,6 @@ const AccountsPayableDashboard = () => {
                     </div>
                   </motion.div>
                 )}
-
                 {/* Recommended Actions */}
                 {recActions.length > 0 && (
                   <motion.div
@@ -574,7 +543,6 @@ const AccountsPayableDashboard = () => {
                     </div>
                   </motion.div>
                 )}
-
                 {/* Data Table with Sorting */}
                 {displayRows.length > 0 && (
                   <motion.div
@@ -645,7 +613,7 @@ const AccountsPayableDashboard = () => {
                           <tr>
                             <td colSpan={Object.keys(filteredContent[0]).length} className="px-4 py-2.5 text-center text-sm text-gray-500 dark:text-gray-400">
                               Showing first 10 of {filteredContent.length} rows.{" "}
-                              <motion.button 
+                              <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 onClick={() => toggleShowMore(index)}
                                 className="underline hover:no-underline text-indigo-600 dark:text-indigo-400"
@@ -659,7 +627,6 @@ const AccountsPayableDashboard = () => {
                     </table>
                   </motion.div>
                 )}
-
                 {/* Actions */}
                 <div className="flex gap-2">
                   <motion.button
@@ -697,11 +664,9 @@ const AccountsPayableDashboard = () => {
       </motion.div>
     );
   };
-
   const handlePageChange = useCallback((page) => {
     setCurrentPage(page);
   }, []);
-
   const renderPagination = () => (
     <div className="flex items-center justify-between mt-6 px-4">
       <div className="text-sm text-gray-700 dark:text-gray-300">
@@ -746,41 +711,52 @@ const AccountsPayableDashboard = () => {
       </div>
     </div>
   );
-
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 dark:from-gray-900 via-gray-800 to-gray-700 flex items-center justify-center p-4">
+      <div className={`min-h-screen flex items-center justify-center p-8 ${
+        darkMode
+          ? "dark bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700"
+          : "bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50"
+      }`}>
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full text-center space-y-6"
         >
-          <div className="relative">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            >
-              <Loader className="w-12 h-12 text-indigo-500 dark:text-indigo-400 mx-auto mb-4" />
-            </motion.div>
-            <Sparkles className="absolute -top-1 -right-1 w-5 h-5 text-yellow-400 animate-pulse" />
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="mx-auto w-16 h-16 border-4 border-indigo-200/50 dark:border-indigo-800/50 border-t-indigo-500 dark:border-t-indigo-400 rounded-full"
+          />
+          <div className="space-y-2">
+            <h2 className={`text-xl font-semibold ${
+              darkMode ? "text-gray-100" : "text-gray-900"
+            }`}>
+              Loading Dashboard Insights
+            </h2>
+            <p className={`text-sm ${
+              darkMode ? "text-gray-400" : "text-gray-600"
+            }`}>
+              AI agents are analyzing your accounts payable data.
+            </p>
           </div>
-          <p className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-1">
-            Loading dashboard insights...
-          </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">AI agents are analyzing your data</p>
           <motion.button
-            whileHover={{ scale: 1.05 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={handleRefresh}
-            className="mt-4 flex items-center gap-2 mx-auto px-4 py-2 bg-indigo-500 text-white rounded-xl text-sm"
+            className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-md ${
+              darkMode
+                ? "bg-indigo-600/90 hover:bg-indigo-500/90 text-white shadow-lg hover:shadow-xl dark:border-gray-700/50"
+                : "bg-indigo-500/90 hover:bg-indigo-600 text-white shadow-lg hover:shadow-xl border border-indigo-200/50"
+            }`}
           >
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            Refresh Data
           </motion.button>
         </motion.div>
       </div>
     );
   }
-
   return (
     <div
       className={`min-h-screen transition-all duration-500 ${
@@ -806,7 +782,6 @@ const AccountsPayableDashboard = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Streamlined Header */}
       <header className="bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 dark:from-indigo-800 dark:via-purple-800 dark:to-blue-800 text-white shadow-xl sticky top-0 z-50 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -826,7 +801,6 @@ const AccountsPayableDashboard = () => {
               </p>
             </div>
           </div>
-
           {/* Right Side - Compact */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-64">
@@ -887,7 +861,6 @@ const AccountsPayableDashboard = () => {
           </div>
         </div>
       </header>
-
       {/* Settings Modal - Simplified */}
       <AnimatePresence>
         {showSettings && (
@@ -936,7 +909,6 @@ const AccountsPayableDashboard = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Compact Tab Navigation */}
       <nav className="max-w-7xl mx-auto px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/30 backdrop-blur-sm">
         <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1.5 -mx-1.5">
@@ -962,7 +934,6 @@ const AccountsPayableDashboard = () => {
           })}
         </div>
       </nav>
-
       {/* Severity Count Cards */}
       <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {severityOrder.map((sev, i) => {
@@ -1015,7 +986,6 @@ const AccountsPayableDashboard = () => {
           );
         })}
       </section>
-
       {/* Error State - Compact */}
       {error && (
         <motion.div
@@ -1036,7 +1006,6 @@ const AccountsPayableDashboard = () => {
           </div>
         </motion.div>
       )}
-
       {/* Focused Findings Section */}
       <main className="max-w-7xl mx-auto px-4 pb-16 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
@@ -1074,7 +1043,6 @@ const AccountsPayableDashboard = () => {
             </button>
           </div>
         </div>
-
         {filteredFindings.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1103,5 +1071,4 @@ const AccountsPayableDashboard = () => {
     </div>
   );
 };
-
 export default AccountsPayableDashboard;

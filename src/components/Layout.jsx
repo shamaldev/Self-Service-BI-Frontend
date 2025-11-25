@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Outlet } from "react-router-dom";   // ✅ Import this
+import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false); // Lifted state to Layout
 
   useEffect(() => {
     const checkMobile = () => {
@@ -14,14 +15,13 @@ export default function Layout() {
         setSidebarOpen(false);
       }
     };
-
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   return (
-    <div className="flex h-screen min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="flex h-screen w-screen bg-transparent">
       {/* Mobile Menu Button */}
       <button
         onClick={() => setSidebarOpen(true)}
@@ -29,7 +29,6 @@ export default function Layout() {
       >
         <Bars3Icon className="h-6 w-6 text-gray-600" />
       </button>
-
       {/* Mobile Overlay */}
       {sidebarOpen && isMobile && (
         <div
@@ -37,29 +36,32 @@ export default function Layout() {
           onClick={() => setSidebarOpen(false)}
         />
       )}
-
       {/* Sidebar */}
       <div
         className={`
-          ${isMobile ? "fixed inset-y-0 left-0 z-50" : "relative h-full"}
-          transition-transform duration-300 ease-in-out
+          ${isMobile
+            ? "fixed inset-y-0 left-0 z-50 w-64"
+            : `relative z-40 h-full transition-all duration-300 ease-in-out ${isCollapsed ? "w-20" : "w-64"}`
+          }
           ${isMobile && !sidebarOpen ? "-translate-x-full" : "translate-x-0"}
+          flex-shrink-0
         `}
       >
-        <Sidebar isMobile={isMobile} onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          isMobile={isMobile}
+          onClose={() => setSidebarOpen(false)}
+          isCollapsed={isCollapsed}
+          setIsCollapsed={setIsCollapsed}
+        />
       </div>
-
       {/* Main Content */}
       <main
         className={`
-          flex-1 overflow-y-auto transition-all duration-300 h-full
-          ${isMobile ? "p-4 pt-16" : "p-6"}
+          flex-1 min-h-0 overflow-y-auto transition-all duration-300 h-full relative z-10
+          ${isMobile ? "p-4 pt-16" : "p-0"}
         `}
       >
-        <div className="max-w-7xl mx-auto">
-          {/* 👇 This is where Dashboard or AIAssistant will render */}
-          <Outlet />  
-        </div>
+        <Outlet />
       </main>
     </div>
   );

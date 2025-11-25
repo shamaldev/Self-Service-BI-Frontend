@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  useContext,
+} from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import * as htmlToImage from "html-to-image";
 import { formatDate, formatNumber } from "../utils/utils";
@@ -7,6 +14,7 @@ import ChartRenderer from "./ChartRenderer";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { API_BASE_URL } from "../config/axios";
 import React from "react";
+import Cookies from "js-cookie";
 import {
   BanknotesIcon,
   ChartBarIcon,
@@ -43,6 +51,10 @@ const iconMap = {
   sparkles: SparklesIcon,
   bolt: BoltIcon,
 };
+
+// Sidebar Context for sharing collapsed state
+const SidebarContext = React.createContext({ isCollapsed: false });
+
 const isCurrencyKPI = (title) => {
   const currencyWords = [
     "amount",
@@ -132,7 +144,9 @@ const RegenerateModal = React.memo(
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-6 border-b border-gray-200">
-            <h3 className="text-xl font-bold text-gray-900">Regenerate Chart</h3>
+            <h3 className="text-xl font-bold text-gray-900">
+              Regenerate Chart
+            </h3>
           </div>
           <div className="p-6 space-y-4">
             <textarea
@@ -166,7 +180,10 @@ const RegenerateModal = React.memo(
     );
   }
 );
+
 export default function Dashboard() {
+  const { isCollapsed } = useContext(SidebarContext);
+  const sidebarWidthClass = isCollapsed ? "lg:left-20" : "lg:left-64";
   const [kpis, setKpis] = useState([]);
   const [charts, setCharts] = useState([]);
   // Default layout with empty arrays for each breakpoint to ensure consistent structure
@@ -277,7 +294,11 @@ export default function Dashboard() {
         `${API_BASE_URL}/conversational-bi/query-chart`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+
+          headers: {
+            "Content-Type": "application/json",
+            authorization: `Bearer ${Cookies.get("access_token")}`,
+          },
           body: JSON.stringify(requestBody),
         }
       );
@@ -428,8 +449,7 @@ export default function Dashboard() {
           let eventType = "message";
           const dataLines = [];
           lines.forEach((line) => {
-            if (line.startsWith("event:"))
-              eventType = line.slice(6).trim();
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
             else if (line.startsWith("data:"))
               dataLines.push(line.slice(5).trim());
           });
@@ -716,7 +736,7 @@ export default function Dashboard() {
   }, [isGenerating, progress, kpis, charts, goal, layouts]);
   // Generate initial layouts only after generation completes
   useEffect(() => {
-    if (!hasGenerated || charts.length === 0) return;
+    if (kpis.length === 0 && charts.length === 0) return;
     const lg = [];
     const md = [];
     const sm = [];
@@ -794,9 +814,8 @@ export default function Dashboard() {
       });
     });
     // Charts start after KPIs
-    const chartsStartY_lg_md = Math.ceil(
-      cardIds.length / KPIS_PER_ROW_LG
-    ) * KPI_HEIGHT_LG;
+    const chartsStartY_lg_md =
+      Math.ceil(cardIds.length / KPIS_PER_ROW_LG) * KPI_HEIGHT_LG;
     // Charts for lg: strictly 2 per row
     orderedChartIdsRef.current.forEach((id, index) => {
       const w = CHART_WIDTH_LG;
@@ -840,9 +859,8 @@ export default function Dashboard() {
       md.push(item);
     });
     // Charts for sm: vertical stack, full width
-    const chartsStartY_sm = Math.ceil(
-      cardIds.length / KPIS_PER_ROW_SM
-    ) * KPI_HEIGHT_SM;
+    const chartsStartY_sm =
+      Math.ceil(cardIds.length / KPIS_PER_ROW_SM) * KPI_HEIGHT_SM;
     let currentY_sm = chartsStartY_sm;
     orderedChartIdsRef.current.forEach((id) => {
       const w = CHART_WIDTH_SM;
@@ -861,7 +879,7 @@ export default function Dashboard() {
       currentY_sm += h;
     });
     setLayouts({ lg, md, sm });
-  }, [hasGenerated, kpis.length, charts.length]); // Only regenerate after hasGenerated and lengths stable
+  }, [kpis.length, charts.length]); // Only regenerate after hasGenerated and lengths stable
   const cfoSuggestions = [
     "Strategic Financial Insights",
     "Spend Trend Analysis",
@@ -902,7 +920,7 @@ export default function Dashboard() {
     // Update the current breakpoint's layout (assuming lg for simplicity; extend for others if needed)
     setLayouts(allLayouts);
     // Auto-save to localStorage
-    localStorage.setItem('customLayout', JSON.stringify(allLayouts));
+    localStorage.setItem("customLayout", JSON.stringify(allLayouts));
   }, []);
   const toggleChartSize = useCallback((id) => {
     setLayouts((prevLayouts) => {
@@ -938,7 +956,6 @@ export default function Dashboard() {
           chart.chart_config?.title || chart.kpi?.title || "Untitled Chart";
         const subtitle = chart.chart_config?.subtitle || "";
         const description = chart.kpi?.description || "";
-        const showAlert = title.includes("Cost") && Math.random() > 0.5;
         return (
           <div key={`chart-${id}`}>
             <div className="group/chart bg-purple-100/90 hover:bg-purple-100/95 transition-colors duration-500 rounded-3xl border border-white/40 shadow-2xl h-full flex flex-col overflow-hidden cursor-move hover:shadow-3xl hover:shadow-purple-200/50 backdrop-blur-xl">
@@ -949,14 +966,20 @@ export default function Dashboard() {
                       {title}
                     </h2>
                     {description && (
-                      <div className="relative group/desc flex-shrink-0" role="tooltip" aria-label="Chart description">
+                      <div
+                        className="relative group/desc flex-shrink-0"
+                        role="tooltip"
+                        aria-label="Chart description"
+                      >
                         <InformationCircleIcon className="h-4 w-4 text-gray-400 flex-shrink-0 transition-all duration-300 group-hover/desc:scale-110 group-hover/desc:text-indigo-500 cursor-help" />
                         <div className="invisible group-hover/desc:visible absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gradient-to-r from-gray-900/95 to-gray-800/95 text-white text-xs px-4 py-3 rounded-2xl z-[9999] whitespace-pre-wrap max-w-md shadow-2xl backdrop-blur-md border border-white/30 transition-all duration-300 opacity-0 group-hover/desc:opacity-100 group-hover/desc:translate-y-1">
                           {/* Arrow for better UX */}
                           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
                             <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900/95 rotate-180" />
                           </div>
-                          <p className="relative z-10 leading-relaxed">{description}</p>
+                          <p className="relative z-10 leading-relaxed">
+                            {description}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -1085,7 +1108,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div
-                className="flex-1 p-6 relative overflow-hidden"
+                className="flex-1 p-6 relative overflow-hidden bg-white"
                 id={`chart-content-${id}`}
               >
                 {chart.error ? (
@@ -1111,10 +1134,13 @@ export default function Dashboard() {
                         customTooltip: true,
                         formatValue: (value, name) => {
                           // Financial-friendly formatting
-                          if (typeof value === 'number' && isCurrencyKPI(name)) {
+                          if (
+                            typeof value === "number" &&
+                            isCurrencyKPI(name)
+                          ) {
                             return `$${formatNumber(value, true)}`;
                           }
-                          if (typeof value === 'number') {
+                          if (typeof value === "number") {
                             return formatNumber(value);
                           }
                           if (value instanceof Date) {
@@ -1123,13 +1149,15 @@ export default function Dashboard() {
                           return value;
                         },
                         styles: {
-                          background: 'linear-gradient(to right, rgb(31 41 55 / 0.95), rgb(17 24 39 / 0.95))',
-                          color: 'white',
-                          borderRadius: '12px',
-                          padding: '12px',
-                          boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)',
-                          fontSize: '14px',
-                          maxWidth: '400px',
+                          background:
+                            "linear-gradient(to right, rgb(31 41 55 / 0.95), rgb(17 24 39 / 0.95))",
+                          color: "white",
+                          borderRadius: "12px",
+                          padding: "12px",
+                          boxShadow:
+                            "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
+                          fontSize: "14px",
+                          maxWidth: "400px",
                         },
                         // Add pointer arrow if supported
                         showArrow: true,
@@ -1138,15 +1166,6 @@ export default function Dashboard() {
                   </ErrorBoundary>
                 )}
               </div>
-              {showAlert && (
-                <div className="bg-gradient-to-r from-yellow-50/90 to-orange-50/90 p-4 text-sm text-yellow-800 flex items-center gap-3 border-t border-yellow-200/60 shadow-inner backdrop-blur-sm">
-                  <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />
-                  {/* <span className="font-semibold">
-                    Cost Optimization Alert: Marketing costs increased 18% vs
-                    budget. Review recommended.
-                  </span> */}
-                </div>
-              )}
             </div>
           </div>
         );
@@ -1195,15 +1214,19 @@ export default function Dashboard() {
                 <button
                   onClick={() => setFreeformMode(!freeformMode)}
                   className={`group relative flex items-center gap-2 px-4 py-3 text-sm font-semibold ${
-                    freeformMode 
-                      ? 'bg-green-100 text-green-700 border border-green-300/60' 
-                      : 'bg-white/90 text-gray-700 border border-gray-200/60'
+                    freeformMode
+                      ? "bg-green-100 text-green-700 border border-green-300/60"
+                      : "bg-white/90 text-gray-700 border border-gray-200/60"
                   } rounded-xl hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:ring-offset-2 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 overflow-hidden`}
                 >
-                  <span className={freeformMode ? 'text-green-500' : 'text-gray-400'}>
-                    {freeformMode ? '🆓' : '🔒'}
+                  <span
+                    className={
+                      freeformMode ? "text-green-500" : "text-gray-400"
+                    }
+                  >
+                    {freeformMode ? "🆓" : "🔒"}
                   </span>
-                  <span>{freeformMode ? 'Freeform' : 'Structured'}</span>
+                  <span>{freeformMode ? "Freeform" : "Structured"}</span>
                   <span className="text-xs">(Layout)</span>
                 </button>
                 <button
@@ -1370,14 +1393,20 @@ export default function Dashboard() {
                                   {kpi.title}
                                 </h3>
                                 {kpi.description && (
-                                  <div className="relative group/kpi-icon mt-2 flex-shrink-0" role="tooltip" aria-label="KPI description">
+                                  <div
+                                    className="relative group/kpi-icon mt-2 flex-shrink-0"
+                                    role="tooltip"
+                                    aria-label="KPI description"
+                                  >
                                     <InformationCircleIcon className="h-4 w-4 text-gray-400 cursor-help flex-shrink-0 transition-all duration-300 group-hover/kpi-icon:scale-110 group-hover/kpi-icon:text-indigo-500" />
                                     <div className="invisible group-hover/kpi-icon:visible absolute -top-10 right-0 bg-gradient-to-r from-gray-900/95 to-gray-800/95 text-white text-xs px-4 py-3 rounded-2xl z-[9999] whitespace-pre-wrap max-w-md shadow-2xl backdrop-blur-md border border-white/30 transition-all duration-300 opacity-0 group-hover/kpi-icon:opacity-100 group-hover/kpi-icon:translate-y-2">
                                       {/* Arrow for better UX */}
                                       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2">
                                         <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-gray-900/95" />
                                       </div>
-                                      <p className="relative z-10 leading-relaxed">{kpi.description}</p>
+                                      <p className="relative z-10 leading-relaxed">
+                                        {kpi.description}
+                                      </p>
                                     </div>
                                   </div>
                                 )}
@@ -1511,11 +1540,11 @@ export default function Dashboard() {
       )}
       {showDataModal && (
         <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-md transition-opacity duration-300"
+          className={`fixed inset-0 ${sidebarWidthClass} bg-black/70 flex items-center justify-center z-[9999] px-4 backdrop-blur-md transition-opacity duration-300`}
           onClick={() => setShowDataModal(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-7xl w-full max-h-[95vh] overflow-hidden shadow-2xl flex flex-col animate-fade-in-scale"
+            className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-hidden shadow-2xl flex flex-col animate-fade-in-scale"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6 border-b border-gray-100/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">

@@ -8,7 +8,6 @@ import Landing from "./pages/Landing";
 import Signup from "./pages/SignUp";
 import PrivateRoute from "./PrivateRoute";
 import AccountsPayableDashboard from "./pages/AccountsPayableDashboard";
-
 function App() {
   return (
     <BrowserRouter>
@@ -16,7 +15,7 @@ function App() {
         {/* === Public Routes === */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-         
+        
         {/* === Protected Routes without Sidebar === */}
         <Route
           path="/landing"
@@ -32,16 +31,15 @@ function App() {
           element={
             <PrivateRoute>
               <Layout />
-            </PrivateRoute> 
+            </PrivateRoute>
           }
         >
           <Route path="/" element={<Dashboard />} />
-          <Route path="/ai-assistant" element={<AIAssistant />} />
+          <Route path="/ai-assistant/:convId?" element={<AIAssistant />} />
           <Route path="/insights" element={<AccountsPayableDashboard />} />
         </Route>
       </Routes>
     </BrowserRouter>
   );
 }
-
 export default App;

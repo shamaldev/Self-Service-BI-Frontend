@@ -9,27 +9,23 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { motion } from "framer-motion";
-
 // Mock utils for demo
 const formatDate = (value) => {
   if (!value) return "";
   const date = new Date(value);
   return isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 };
-
 const formatNumber = (value, compact = false) => {
   if (value === null || value === undefined) return "";
-  return new Intl.NumberFormat('en-US', { 
+  return new Intl.NumberFormat('en-US', {
     notation: compact ? 'compact' : 'standard',
-    maximumFractionDigits: 2 
+    maximumFractionDigits: 2
   }).format(value);
 };
-
 const getResponsiveMargin = (type, width) => {
   if (width < 400) return { top: 10, right: 10, left: 0, bottom: 20 };
   return { top: 20, right: 30, left: 20, bottom: 40 };
 };
-
 const chartColors = {
   area: ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"],
 };
@@ -49,13 +45,11 @@ const AreaChartComponent = ({
       </div>
     );
   }
-
   const { width: containerWidth } = containerSize || { width: 400, height: 300 };
   const xKey = chartConfig?.x_axis_col_name || Object.keys(data[0])[0] || "x";
   const yKeys = Array.isArray(chartConfig?.y_axis_col_name)
     ? chartConfig.y_axis_col_name
     : [chartConfig?.y_axis_col_name || Object.keys(data[0]).find((k) => k !== xKey) || "y"];
-
   if (yKeys.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm">
@@ -63,18 +57,14 @@ const AreaChartComponent = ({
       </div>
     );
   }
-
   const xLabel = chartConfig?.x_axis_label || xKey;
   const yLabel = chartConfig?.y_axis_label || yKeys.join(", ");
   const margin = getResponsiveMargin("areachart", containerWidth);
-
   const [visibleKeys, setVisibleKeys] = useState(
     Object.fromEntries(yKeys.map((y) => [y, true]))
   );
-
   const toggleSeries = (key) =>
     setVisibleKeys((prev) => ({ ...prev, [key]: !prev[key] }));
-
   const transformedData = data
     .map((item) => {
       const point = { [xKey]: item[xKey] };
@@ -91,7 +81,6 @@ const AreaChartComponent = ({
         (a[xKey] < b[xKey] ? -1 : 1) :
         dateA - dateB;
     });
-
   const CustomLegend = () => (
     <div className="flex flex-wrap justify-center gap-3 mt-4">
       {yKeys.map((yKey, i) => {
@@ -103,25 +92,31 @@ const AreaChartComponent = ({
             onClick={() => toggleSeries(yKey)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300
+            className={`group relative flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
               ${
                 active
-                  ? "bg-white text-gray-800 border border-gray-300"
-                  : "bg-gray-100 text-gray-400 border border-gray-200 opacity-60"
+                  ? "bg-white text-gray-900 border border-gray-200 shadow-md hover:shadow-lg hover:bg-gray-50"
+                  : "bg-gray-100 text-gray-500 border border-gray-200 shadow-sm hover:bg-gray-200 hover:text-gray-600 line-through opacity-70"
               }`}
-            style={{ borderLeft: `6px solid ${color}` }}
+            style={{ borderLeft: `4px solid ${active ? color : `${color}80`}` }}
+            aria-label={`Toggle visibility of ${yKey} series ${active ? '(visible)' : '(hidden)'}`}
+            title={`Click to ${active ? 'hide' : 'show'} ${yKey} series`}
           >
-            <span
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: color, opacity: active ? 1 : 0.4 }}
-            ></span>
-            <span className="font-medium">{yKey}</span>
+            <motion.span
+              className="w-3 h-3 rounded-full border-2 border-current"
+              style={{ backgroundColor: active ? color : 'transparent', borderColor: color }}
+              initial={{ scale: 0.8 }}
+              animate={{ scale: active ? 1 : 0.6, opacity: active ? 1 : 0.5 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+            />
+            <span className={`font-semibold text-sm truncate max-w-[120px] transition-opacity duration-300 ${active ? 'opacity-100' : 'opacity-60'}`}>
+              {yKey}
+            </span>
           </motion.button>
         );
       })}
     </div>
   );
-
   return (
     <motion.div
       className="flex flex-col h-full w-full p-2"
