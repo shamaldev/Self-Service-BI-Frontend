@@ -34,6 +34,7 @@ import {
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "../config/axios";
+const CACHE_KEY = "provactiveCache";
 const AccountsPayableDashboard = () => {
   const [globalSearch, setGlobalSearch] = useState("");
   const [expandedFindings, setExpandedFindings] = useState(new Set());
@@ -49,9 +50,25 @@ const AccountsPayableDashboard = () => {
   const [toast, setToast] = useState({ message: "", type: "", visible: false });
   const [showMoreRows, setShowMoreRows] = useState({}); // Track show more per finding
   const ITEMS_PER_PAGE = 5;
-  const fetchData = async () => {
+  const fetchData = async (useCache = true) => {
     setRefreshing(true);
     setError(null);
+    // Load from cache first if enabled
+    if (useCache) {
+      try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsedData = JSON.parse(cached);
+          setData1(parsedData);
+          setIsLoading(false); // Show cached data immediately
+          showToast("Loaded from cache. Refreshing...", "info");
+        }
+      } catch (parseErr) {
+        console.error("Failed to parse cached data:", parseErr);
+        localStorage.removeItem(CACHE_KEY); // Invalidate bad cache
+      }
+    }
+    // Always fetch fresh data
     try {
       const response = await axios.post(
         `${API_BASE_URL}/run_proactive_agents`,
@@ -63,21 +80,32 @@ const AccountsPayableDashboard = () => {
         }
       );
       setData1(response.data);
-      console.log("Fetched data:", response.data);
+      // Cache the fresh data
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(response.data));
+      } catch (cacheErr) {
+        console.error("Failed to cache data:", cacheErr);
+      }
+      console.log("Fetched and cached data:", response.data);
+      showToast("Data refreshed successfully", "success");
     } catch (error) {
       console.error("Error fetching data:", error);
-      setError("Failed to fetch insights. Please try again.");
-      showToast("Failed to load data", "error");
+      if (!useCache || !localStorage.getItem(CACHE_KEY)) {
+        setError("Failed to fetch insights. Please try again.");
+        showToast("Failed to load data", "error");
+      } else {
+        showToast("Using cached data (fetch failed)", "warning");
+      }
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
   };
   useEffect(() => {
-    fetchData();
+    fetchData(true); // Enable cache on initial load
   }, []);
   const handleRefresh = useCallback(() => {
-    fetchData();
+    fetchData(false); // Disable cache for manual refresh (force fresh)
   }, []);
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type, visible: true });
@@ -254,6 +282,13 @@ const AccountsPayableDashboard = () => {
     return counts;
   }, [data1.agent_findings]);
   const severityOrder = ["Critical", "Medium", "Low"];
+  // Compute total count for all insights
+  const totalInsights = useMemo(() => {
+    return Object.values(data1.run_summary || {}).reduce((sum, val) => {
+      const num = getNumberFromSummary(val);
+      return sum + (num ? parseInt(num) : 0);
+    }, 0);
+  }, [data1]);
   // Filtered findings based on tab, search, severity
   const filteredFindings = useMemo(() => {
     let findings = data1.agent_findings || [];
@@ -347,18 +382,20 @@ const AccountsPayableDashboard = () => {
     const isExpanded = expandedFindings.has(index);
     const content = finding.raw_data || [];
     const structured = finding.structured_summary || {};
-    const keyFindings = Array.isArray(structured.key_Findings)
-      ? structured.key_Findings
-      : [];
-   
-    const recActions = Array.isArray(structured.recommended_actions)
-      ? structured.recommended_actions
-      : typeof structured.recommended_actions === "string"
-      ? structured.recommended_actions
-          .split(",")
-          .map((a) => a.trim())
-          .filter((a) => a)
-      : [];
+    const keyFindings = useMemo(() => {
+      if (Array.isArray(structured.key_findings)) return structured.key_findings;
+      if (typeof structured.key_findings === 'string') {
+        return structured.key_findings.split('\n').map(line => line.trim()).filter(line => line && (line.startsWith('- ') || line.startsWith('• '))).map(line => line.substring(2).trim());
+      }
+      return [];
+    }, [structured]);
+    const recActions = useMemo(() => {
+      if (Array.isArray(structured.recommended_actions)) return structured.recommended_actions;
+      if (typeof structured.recommended_actions === 'string') {
+        return structured.recommended_actions.split('\n').map(line => line.trim()).filter(line => line && (line.startsWith('- ') || line.startsWith('• '))).map(line => line.substring(2).trim());
+      }
+      return [];
+    }, [structured]);
     const summaryText = useMemo(() => {
       if (!structured.alert_title) return "";
       let text = `**${structured.alert_title}**`;
@@ -757,6 +794,11 @@ const AccountsPayableDashboard = () => {
       </div>
     );
   }
+  const currentTabConfig = tabConfigs.find(t => t.id === activeTab);
+  const currentCount = activeTab === "all" 
+    ? totalInsights 
+    : getNumberFromSummary(data1.run_summary?.[currentTabConfig?.tool]);
+  const currentLabel = currentTabConfig?.label || activeTab;
   return (
     <div
       className={`min-h-screen transition-all duration-500 ${
@@ -775,6 +817,8 @@ const AccountsPayableDashboard = () => {
             className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-xl shadow-2xl text-sm ${
               toast.type === "error"
                 ? "bg-red-500 text-white"
+                : toast.type === "info" || toast.type === "warning"
+                ? "bg-blue-500 text-white"
                 : "bg-green-500 text-white"
             }`}
           >
@@ -915,6 +959,8 @@ const AccountsPayableDashboard = () => {
           {tabConfigs.map((tab) => {
             const isActive = activeTab === tab.id;
             const Icon = tab.icon;
+            const tool = tab.tool;
+            const count = tool ? getNumberFromSummary(data1.run_summary?.[tool]) : totalInsights;
             return (
               <motion.button
                 key={tab.id}
@@ -929,6 +975,9 @@ const AccountsPayableDashboard = () => {
               >
                 <Icon className={`w-3 h-3 ${isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
                 {tab.label}
+                <span className={`text-xs opacity-75 ${isActive ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
+                  ({count || 0})
+                </span>
               </motion.button>
             );
           })}
@@ -1010,7 +1059,7 @@ const AccountsPayableDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 pb-16 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-            {activeTab === "all" ? "All Insights" : tabConfigs.find(t => t.id === activeTab)?.label || activeTab} ({filteredFindings.length})
+            {activeTab === "all" ? "All Insights" : currentLabel} ({currentCount || filteredFindings.length})
           </h2>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <motion.button

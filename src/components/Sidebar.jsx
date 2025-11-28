@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext } from "react";
 import axios from "axios";
 import Cookies from "js-cookie";
 import { jwtDecode } from "jwt-decode";
@@ -16,8 +16,10 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   TrashIcon,
- ArrowRightStartOnRectangleIcon,
+  ArrowRightStartOnRectangleIcon,
 } from "@heroicons/react/24/outline";
+
+export const SidebarContext = createContext({ isCollapsed: false });
 
 export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsCollapsed }) {
   const [userName, setUserName] = useState("User");
@@ -27,7 +29,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
   const navigate = useNavigate();
   const location = useLocation();
   const shouldCollapse = isMobile ? false : isCollapsed;
-
   const decodeJWT = (token) => {
     try {
       if (!token) throw new Error("Token is missing");
@@ -37,7 +38,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
       return null;
     }
   };
-
   const formatRelativeTime = (dateStr) => {
     if (!dateStr) return "";
     try {
@@ -59,12 +59,10 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
       return "";
     }
   };
-
   const handleDeleteConversation = async (convId) => {
     if (!window.confirm("Delete this conversation permanently?")) return;
     const accessToken = Cookies.get("access_token");
     if (!accessToken) return;
-
     try {
       await axios.delete(
         `${API_BASE_URL}/bi-history/conversations/${convId}`,
@@ -75,19 +73,18 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
         }
       );
       setConversations((prev) => prev.filter((c) => c.conversation_id !== convId));
-      
+    
       // ✅ FIX: Check if we're currently viewing the deleted conversation
       if (location.pathname === `/ai-assistant/${convId}`) {
         navigate("/ai-assistant", { replace: true });
       }
-      
+    
       toast.success("Conversation deleted successfully.");
     } catch (error) {
       console.error(error);
       toast.error("Error deleting conversation.");
     }
   };
-
   // ✅ FIX: Add fetchConversations as a separate function that can be called
   const fetchConversations = async () => {
     const accessToken = Cookies.get("access_token");
@@ -95,7 +92,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
       setLoadingConversations(false);
       return;
     }
-
     setLoadingConversations(true);
     try {
       const response = await axios.get(
@@ -114,7 +110,7 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
           },
         }
       );
-      
+    
       const convs = response.data.conversations || [];
       convs.sort(
         (a, b) =>
@@ -129,7 +125,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
       setLoadingConversations(false);
     }
   };
-
   useEffect(() => {
     const accessToken = Cookies.get("access_token");
     if (accessToken) {
@@ -143,7 +138,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
       setLoadingConversations(false);
     }
   }, []);
-
   // ✅ FIX: Refresh conversations when location changes (optional but helpful)
   useEffect(() => {
     // Only refresh if we're on an AI assistant route
@@ -154,29 +148,25 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
       }
     }
   }, [location.pathname]);
-
   const handleLogout = () => {
     Cookies.remove("access_token", { path: "/" });
     localStorage.removeItem("dashboardCache");
+    localStorage.removeItem("provactiveCache");
     navigate("/login");
   };
-
   // ✅ FIX: Helper to determine if a conversation is active
   // Only show as active if we're actually on an AI assistant route
   const isConversationActive = (convId) => {
     return location.pathname === `/ai-assistant/${convId}`;
   };
-
   // ✅ FIX: Helper to check if we're on the main AI assistant page (no conversation)
   const isMainAIAssistantActive = () => {
     return location.pathname === '/ai-assistant';
   };
-
   // ✅ FIX: Check if we're on any AI assistant route at all
   const isOnAIAssistantRoute = () => {
     return location.pathname.startsWith('/ai-assistant');
   };
-
   return (
     <aside
       className={`
@@ -196,7 +186,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
           <XMarkIcon className="h-5 w-5 text-gray-600" />
         </button>
       )}
-
       {/* Desktop Toggle */}
       {!isMobile && (
         <button
@@ -211,7 +200,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
           )}
         </button>
       )}
-
       {/* Logo */}
       <div className="relative bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200/50">
         <div className="px-4 py-5">
@@ -231,7 +219,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
           </h1>
         </div>
       </div>
-
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Primary Navigation */}
@@ -263,7 +250,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
               )}
             </NavLink>
           </div>
-
           {/* AI Assistant (main entry → new chat) */}
           <div className="relative group">
             <NavLink
@@ -291,7 +277,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
               )}
             </NavLink>
           </div>
-
           {/* Alert Monitoring */}
           <div className="relative group">
             <NavLink
@@ -319,15 +304,13 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
             </NavLink>
           </div>
         </nav>
-
-        {/* Conversation History – hidden when collapsed */}
-        {!shouldCollapse && (
+        {/* Conversation History – hidden when collapsed or not on AI Assistant route */}
+        {isOnAIAssistantRoute() && !shouldCollapse && (
           <div className="flex-1 overflow-y-auto px-3 pb-4">
             <div className="border-t border-gray-200/50 pt-5 mt-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">
                 Conversations
               </p>
-
               {/* New Chat Button */}
               <button
                 onClick={() => navigate("/ai-assistant", { replace: true })}
@@ -336,7 +319,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
                 <PlusIcon className="h-5 w-5 transition-colors duration-150" />
                 New Chat
               </button>
-
               {/* Loading State */}
               {loadingConversations && (
                 <div className="space-y-3">
@@ -348,7 +330,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
                   ))}
                 </div>
               )}
-
               {/* Empty State */}
               {!loadingConversations && conversations.length === 0 && (
                 <div className="text-center py-12 text-gray-400 text-sm">
@@ -359,7 +340,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
                   </p>
                 </div>
               )}
-
               {/* Conversations List */}
               {!loadingConversations && conversations.length > 0 && (
                 <div className="space-y-1.5">
@@ -368,7 +348,7 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
                     const isActive = isOnAIAssistantRoute() && isConversationActive(conv.conversation_id);
                     const title = conv.title?.trim() || "Untitled Conversation";
                     const preview = conv.preview_message || conv.last_message || null;
-                    
+                  
                     return (
                       <div key={conv.conversation_id} className="relative group">
                         <button
@@ -410,7 +390,7 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
                             </span>
                           </div>
                         </button>
-                        
+                      
                         {/* Delete */}
                         <button
                           onClick={(e) => {
@@ -431,7 +411,6 @@ export default function Sidebar({ isMobile = false, onClose, isCollapsed, setIsC
           </div>
         )}
       </div>
-
       {/* User Profile */}
       <div className="border-t border-gray-200/50 p-4">
         <div

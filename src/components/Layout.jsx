@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
-import Sidebar from "./Sidebar";
+import Sidebar, { SidebarContext } from "./Sidebar";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
-
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false); // Lifted state to Layout
-
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -19,7 +17,6 @@ export default function Layout() {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
   return (
     <div className="flex h-screen w-screen bg-transparent">
       {/* Mobile Menu Button */}
@@ -61,7 +58,9 @@ export default function Layout() {
           ${isMobile ? "p-4 pt-16" : "p-0"}
         `}
       >
-        <Outlet />
+        <SidebarContext.Provider value={{ isCollapsed }}>
+          <Outlet />
+        </SidebarContext.Provider>
       </main>
     </div>
   );

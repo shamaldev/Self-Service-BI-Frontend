@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 
 // Create axios instance with custom config
 const axiosInstance = axios.create({
-    baseURL: 'https://535e9427f65e.ngrok-free.app/api/v1',
+    baseURL: 'https://caf360107243.ngrok-free.app/api/v1',
     timeout: 30000, // 30 seconds
     headers: {
         'Content-Type': 'application/json'

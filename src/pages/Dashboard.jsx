@@ -35,6 +35,7 @@ import {
   SparklesIcon,
   BoltIcon,
   UserIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -51,10 +52,8 @@ const iconMap = {
   sparkles: SparklesIcon,
   bolt: BoltIcon,
 };
-
 // Sidebar Context for sharing collapsed state
 const SidebarContext = React.createContext({ isCollapsed: false });
-
 const isCurrencyKPI = (title) => {
   const currencyWords = [
     "amount",
@@ -180,10 +179,8 @@ const RegenerateModal = React.memo(
     );
   }
 );
-
 export default function Dashboard() {
   const { isCollapsed } = useContext(SidebarContext);
-  const sidebarWidthClass = isCollapsed ? "lg:left-20" : "lg:left-64";
   const [kpis, setKpis] = useState([]);
   const [charts, setCharts] = useState([]);
   // Default layout with empty arrays for each breakpoint to ensure consistent structure
@@ -294,7 +291,6 @@ export default function Dashboard() {
         `${API_BASE_URL}/conversational-bi/query-chart`,
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
             authorization: `Bearer ${Cookies.get("access_token")}`,
@@ -752,8 +748,8 @@ export default function Dashboard() {
     const KPIS_PER_ROW_LG = 3;
     const KPIS_PER_ROW_MD = 3;
     const KPIS_PER_ROW_SM = 2;
-    // Charts: Exactly 2 per row on lg/md
-    const CHART_WIDTH_LG = 6; // 12 / 6 = 2
+    
+    const CHART_WIDTH_LG = 6; 
     const CHART_HEIGHT_LG = 8; // Reduced height for more compact layout while maintaining good aspect ratio for financial charts
     const CHARTS_PER_ROW_LG = 2;
     const CHART_WIDTH_MD = 6;
@@ -761,15 +757,15 @@ export default function Dashboard() {
     const CHARTS_PER_ROW_MD = 2;
     const CHART_WIDTH_SM = 6; // Full width
     const CHART_HEIGHT_SM = 10; // Reduced height on mobile for better scrolling without excessive vertical space
-    // Relaxed constraints for more control
-    const KPI_MAX_W_LG = 6; // Increased from 4
-    const KPI_MAX_H_LG = 6; // Increased from 5
-    const CHART_MAX_W_LG = 12; // Full width allowed
-    const CHART_MAX_H_LG = 16; // Taller for detailed views
+   
+    const KPI_MAX_W_LG = 6; // 
+    const KPI_MAX_H_LG = 6; // 
+    const CHART_MAX_W_LG = 12; // 
+    const CHART_MAX_H_LG = 16; // 
     const cardIds = orderedKpiIdsRef.current.filter(
       (id) => kpiMapRef.current.get(id)?.isKpiCard
     );
-    // KPIs for lg: 3 per row
+  
     cardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
@@ -777,14 +773,14 @@ export default function Dashboard() {
         y: Math.floor(i / KPIS_PER_ROW_LG) * KPI_HEIGHT_LG,
         w: KPI_WIDTH_LG,
         h: KPI_HEIGHT_LG,
-        minW: 3, // Slightly higher min to prevent overlap/squish
+        minW: 3, // 
         maxW: KPI_MAX_W_LG,
-        minH: 3, // Adjusted minH to match decreased height
-        maxH: KPI_MAX_H_LG, // Adjusted maxH to match decreased height
+        minH: 3, // 
+        maxH: KPI_MAX_H_LG, 
       };
       lg.push(item);
     });
-    // KPIs for md: same as lg
+    
     cardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
@@ -793,9 +789,9 @@ export default function Dashboard() {
         w: KPI_WIDTH_MD,
         h: KPI_HEIGHT_MD,
         minW: 3,
-        maxW: KPI_MAX_W_LG, // Use same max as lg
-        minH: 3, // Adjusted minH to match decreased height
-        maxH: KPI_MAX_H_LG, // Adjusted maxH to match decreased height
+        maxW: KPI_MAX_W_LG, 
+        minH: 3, 
+        maxH: KPI_MAX_H_LG, 
       };
       md.push(item);
     });
@@ -1172,6 +1168,7 @@ export default function Dashboard() {
       }),
     [charts, isRegenerating]
   ); // Memoize the entire charts list to prevent re-renders on modal state changes
+  const sidebarLeftClass = isCollapsed ? "left-20" : "left-64";
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-6 relative overflow-hidden">
       {/* Subtle background animation */}
@@ -1336,7 +1333,7 @@ export default function Dashboard() {
             key={resetKey}
             className="layout"
             layouts={layouts}
-            breakpoints={{ lg: 1200, md: 996, sm: 768 }}
+            breakpoints={{ lg: 1200, md: 900, sm: 768 }} // ✅ FIX: Lowered md breakpoint to 900 to maintain 2 charts per row even with expanded sidebar (1200-256=944 >900)
             cols={{ lg: 12, md: 12, sm: 6 }}
             rowHeight={45} // Increased for more vertical breathing room and better proportions
             margin={[20, 30]} // Adjusted margins: tighter horizontal, more vertical for elegant spacing
@@ -1539,173 +1536,178 @@ export default function Dashboard() {
         </div>
       )}
       {showDataModal && (
-        <div
-          className={`fixed inset-0 ${sidebarWidthClass} bg-black/70 flex items-center justify-center z-[9999] px-4 backdrop-blur-md transition-opacity duration-300`}
-          onClick={() => setShowDataModal(false)}
-        >
+        <>
+          {/* Backdrop: Full screen */}
           <div
-            className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-hidden shadow-2xl flex flex-col animate-fade-in-scale"
+            className="fixed inset-0 bg-black/50 z-[9999] backdrop-blur-md transition-opacity duration-300"
+            onClick={() => setShowDataModal(false)}
+          />
+          {/* Modal: Centered popup */}
+          <div
+            className="fixed inset-0 flex items-center justify-center z-[10000] p-4 animate-fade-in-scale"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center p-6 border-b border-gray-100/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <MagnifyingGlassIcon className="h-7 w-7 text-indigo-600 drop-shadow-sm" />
-                {currentTitle} Data Explorer
-              </h2>
-              <button
-                onClick={() => setShowDataModal(false)}
-                className="group relative px-4 py-2 text-gray-500 hover:text-gray-700 font-semibold rounded-xl hover:bg-gray-100/80 backdrop-blur-sm border border-gray-200/50 transition-all duration-300 hover:shadow-md hover:shadow-gray-100/50 active:scale-95"
-              >
-                <span className="group-hover:translate-x-1 transition-transform duration-300">
-                  Close
-                </span>
-              </button>
-            </div>
-            {currentData.length > 0 ? (
-              <>
-                <div className="overflow-auto flex-1">
-                  <table className="min-w-full divide-y divide-gray-200/50 w-full">
-                    <thead className="bg-gradient-to-r from-gray-50/50 to-blue-50/50 sticky top-0 z-10 backdrop-blur-sm">
-                      <tr>
-                        {Object.keys(currentData[0] || {}).map((key) => (
-                          <th
-                            key={key}
-                            className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[150px] max-w-[300px] whitespace-normal break-words"
-                          >
-                            {key
-                              .replace(/_/g, " ")
-                              .replace(/\b\w/g, (l) => l.toUpperCase())}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white/50 divide-y divide-gray-200/50 backdrop-blur-sm">
-                      {currentData
-                        .slice(currentPage * 10, (currentPage + 1) * 10)
-                        .map((row, idx) => (
-                          <tr
-                            key={idx}
-                            className={`group hover:bg-gray-50/50 transition-all duration-200 ${
-                              idx % 2 === 0 ? "bg-gray-50/30" : ""
-                            }`}
-                          >
-                            {Object.entries(row).map(([key, val]) => {
-                              let formattedVal = val;
-                              if (val == null || val === "") {
-                                formattedVal = "-";
-                              } else if (val instanceof Date) {
-                                formattedVal = safeFormatDate(val);
-                              } else if (typeof val === "number") {
-                                const opts = {
-                                  maximumFractionDigits:
-                                    key.toLowerCase().includes("lat") ||
-                                    key.toLowerCase().includes("lon")
-                                      ? 6
-                                      : key.toLowerCase().includes("count") ||
-                                        key.toLowerCase().includes("id")
-                                      ? 0
-                                      : 2,
-                                };
-                                formattedVal = val.toLocaleString(
-                                  "en-US",
-                                  opts
-                                );
-                                if (
-                                  key.toLowerCase().includes("dollar") ||
-                                  key.toLowerCase().includes("amount") ||
-                                  key.toLowerCase().includes("cost") ||
-                                  key.toLowerCase().includes("spend") ||
-                                  key.toLowerCase().includes("inr")
-                                ) {
-                                  formattedVal = `₹${formattedVal}`;
-                                }
-                              } else if (typeof val === "string") {
-                                if (!isNaN(Date.parse(val))) {
-                                  formattedVal = safeFormatDate(val);
-                                } else if (
-                                  key.toLowerCase().includes("percentage") ||
-                                  key.toLowerCase().includes("pct")
-                                ) {
-                                  const num = parseFloat(val);
-                                  formattedVal = isNaN(num)
-                                    ? val
-                                    : `${num.toFixed(2)}%`;
-                                } else {
-                                  formattedVal = val;
-                                }
-                              } else {
-                                formattedVal = String(val);
-                              }
-                              return (
-                                <td
-                                  key={key}
-                                  className="px-6 py-4 whitespace-normal break-words text-sm text-gray-900 font-medium min-w-[150px] max-w-[300px] group-hover:text-gray-800 transition-colors duration-200"
-                                  title={
-                                    typeof val === "string" && val.length > 50
-                                      ? val
-                                      : undefined
-                                  }
-                                >
-                                  {formattedVal}
-                                </td>
-                              );
-                            })}
+            <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-100/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  <MagnifyingGlassIcon className="h-7 w-7 text-indigo-600 drop-shadow-sm" />
+                  {currentTitle} Data Explorer
+                </h2>
+                <button
+                  onClick={() => setShowDataModal(false)}
+                  className="group relative px-4 py-2 text-gray-500 hover:text-gray-700 font-semibold rounded-xl hover:bg-gray-100/80 backdrop-blur-sm border border-gray-200/50 transition-all duration-300 hover:shadow-md hover:shadow-gray-100/50 active:scale-95"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+              {currentData.length > 0 ? (
+                <>
+                  <div className="overflow-auto flex-1">
+                    <div className="px-6 pb-6">
+                      <table className="min-w-full divide-y divide-gray-200/50 w-full table-fixed">
+                        <thead className="bg-gradient-to-r from-gray-50/50 to-blue-50/50 sticky top-0 z-10 backdrop-blur-sm">
+                          <tr>
+                            {Object.keys(currentData[0] || {}).map((key) => (
+                              <th
+                                key={key}
+                                className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-0 flex-1 max-w-none"
+                              >
+                                {key
+                                  .replace(/_/g, " ")
+                                  .replace(/\b\w/g, (l) => l.toUpperCase())}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="border-t border-gray-200/50 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4 p-4 backdrop-blur-sm">
-                  <span className="text-sm text-gray-700 font-medium">
-                    Showing{" "}
-                    <span className="font-bold">
-                      {Math.min((currentPage + 1) * 10, currentData.length)}
-                    </span>{" "}
-                    of <span className="font-bold">{currentData.length}</span>{" "}
-                    rows
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      disabled={currentPage === 0}
-                      onClick={() => setCurrentPage((p) => p - 1)}
-                      className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-gray-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
-                    >
-                      <ChevronLeftIcon className="h-4 w-4" />
-                      Previous
-                    </button>
-                    <span className="px-4 py-2 text-sm font-semibold text-gray-700">
-                      Page {currentPage + 1} of{" "}
-                      {Math.ceil(currentData.length / 10)}
+                        </thead>
+                        <tbody className="bg-white/50 divide-y divide-gray-200/50 backdrop-blur-sm">
+                          {currentData
+                            .slice(currentPage * 10, (currentPage + 1) * 10)
+                            .map((row, idx) => (
+                              <tr
+                                key={idx}
+                                className={`group hover:bg-gray-50/50 transition-all duration-200 ${
+                                  idx % 2 === 0 ? "bg-gray-50/30" : ""
+                                }`}
+                              >
+                                {Object.entries(row).map(([key, val]) => {
+                                  let formattedVal = val;
+                                  if (val == null || val === "") {
+                                    formattedVal = "-";
+                                  } else if (val instanceof Date) {
+                                    formattedVal = safeFormatDate(val);
+                                  } else if (typeof val === "number") {
+                                    const opts = {
+                                      maximumFractionDigits:
+                                        key.toLowerCase().includes("lat") ||
+                                        key.toLowerCase().includes("lon")
+                                          ? 6
+                                          : key.toLowerCase().includes("count") ||
+                                            key.toLowerCase().includes("id")
+                                          ? 0
+                                          : 2,
+                                    };
+                                    formattedVal = val.toLocaleString(
+                                      "en-US",
+                                      opts
+                                    );
+                                    if (
+                                      key.toLowerCase().includes("dollar") ||
+                                      key.toLowerCase().includes("amount") ||
+                                      key.toLowerCase().includes("cost") ||
+                                      key.toLowerCase().includes("spend") ||
+                                      key.toLowerCase().includes("inr")
+                                    ) {
+                                      formattedVal = `₹${formattedVal}`;
+                                    }
+                                  } else if (typeof val === "string") {
+                                    if (!isNaN(Date.parse(val))) {
+                                      formattedVal = safeFormatDate(val);
+                                    } else if (
+                                      key.toLowerCase().includes("percentage") ||
+                                      key.toLowerCase().includes("pct")
+                                    ) {
+                                      const num = parseFloat(val);
+                                      formattedVal = isNaN(num)
+                                        ? val
+                                        : `${num.toFixed(2)}%`;
+                                    } else {
+                                      formattedVal = val;
+                                    }
+                                  } else {
+                                    formattedVal = String(val);
+                                  }
+                                  return (
+                                    <td
+                                      key={key}
+                                      className="px-3 py-4 whitespace-normal break-words text-sm text-gray-900 font-medium min-w-0 flex-1 max-w-none group-hover:text-gray-800 transition-colors duration-200"
+                                      title={
+                                        typeof val === "string" && val.length > 50
+                                          ? val
+                                          : undefined
+                                      }
+                                    >
+                                      {formattedVal}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-200/50 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4 p-6 backdrop-blur-sm">
+                    <span className="text-sm text-gray-700 font-medium">
+                      Showing{" "}
+                      <span className="font-bold">
+                        {Math.min((currentPage + 1) * 10, currentData.length)}
+                      </span>{" "}
+                      of <span className="font-bold">{currentData.length}</span>{" "}
+                      rows
                     </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={currentPage === 0}
+                        onClick={() => setCurrentPage((p) => p - 1)}
+                        className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-gray-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
+                      >
+                        <ChevronLeftIcon className="h-4 w-4" />
+                        Previous
+                      </button>
+                      <span className="px-4 py-2 text-sm font-semibold text-gray-700">
+                        Page {currentPage + 1} of{" "}
+                        {Math.ceil(currentData.length / 10)}
+                      </span>
+                      <button
+                        disabled={(currentPage + 1) * 10 >= currentData.length}
+                        onClick={() => setCurrentPage((p) => p + 1)}
+                        className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-gray-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
+                      >
+                        Next
+                        <ChevronRightIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-6 bg-gradient-to-r from-green-50/50 to-emerald-50/50 border-t border-gray-200/50">
                     <button
-                      disabled={(currentPage + 1) * 10 >= currentData.length}
-                      onClick={() => setCurrentPage((p) => p + 1)}
-                      className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-gray-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
+                      onClick={() =>
+                        downloadCSV(currentData, `${currentTitle}.csv`)
+                      }
+                      className="group relative w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-semibold shadow-lg hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-4 focus:ring-green-200 focus:ring-offset-2 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 overflow-hidden"
                     >
-                      Next
-                      <ChevronRightIcon className="h-4 w-4" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out" />
+                      <span className="relative z-10">Download Full CSV</span>
                     </button>
                   </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-48 text-gray-500 font-medium backdrop-blur-sm p-6">
+                  <p className="text-lg">No data available for this chart.</p>
                 </div>
-                <div className="p-6 bg-gradient-to-r from-green-50/50 to-emerald-50/50 border-t border-gray-200/50">
-                  <button
-                    onClick={() =>
-                      downloadCSV(currentData, `${currentTitle}.csv`)
-                    }
-                    className="group relative w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-semibold shadow-lg hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-4 focus:ring-green-200 focus:ring-offset-2 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 overflow-hidden"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out" />
-                    <span className="relative z-10">Download Full CSV</span>
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-48 text-gray-500 font-medium backdrop-blur-sm">
-                <p className="text-lg">No data available for this chart.</p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
       <RegenerateModal
         isOpen={showRegenModal}
