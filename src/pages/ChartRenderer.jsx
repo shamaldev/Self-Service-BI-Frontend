@@ -2,7 +2,6 @@ import React, { useRef, useState, useCallback, useEffect, useMemo } from "react"
 import { SparklesIcon } from "@heroicons/react/24/outline";
 import { getChartConfig } from "../utils/chartConfig";
 import BubbleMapChart from "../components/charts/BubbleMapChart";
-import LineAreaChart from "../components/charts/LineAreaChart";
 import VerticalBarChart from "../components/charts/VerticalBarChart";
 import HorizontalBarChart from "../components/charts/HorizontalBarChart";
 import StackedBarChart from "../components/charts/StackedBarChart";
