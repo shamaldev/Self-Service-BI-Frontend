@@ -22,7 +22,7 @@ const Login = ({ onLogin }) => {
       const decoded = jwtDecode(token)
       const now = Math.floor(Date.now() / 1000)
       if (decoded.exp > now) {
-        navigate('/landing')
+        navigate('/ai-assistant')
       } else {
         Cookies.remove('access_token')
       }
@@ -62,7 +62,7 @@ const Login = ({ onLogin }) => {
       if (onLogin) onLogin(email, access_token)
 
       // Redirect to landing
-      navigate('/landing')
+      navigate('/ai-assistant')
 
       // Set timeout for auto logout
       const timeout = (decoded.exp - Math.floor(Date.now() / 1000)) * 1000

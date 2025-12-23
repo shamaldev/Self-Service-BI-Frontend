@@ -8,34 +8,31 @@ const PrivateRoute = ({ children }) => {
   const [isValid, setIsValid] = useState(null); // null = checking, true/false = result
   const intervalRef = useRef(null); // Track interval for cleanup
 
+  const cleanupAndLogout = () => {
+    // Comprehensive cleanup
+    Cookies.remove("access_token");
+    localStorage.removeItem("dashboardCache");
+    localStorage.removeItem("provactiveCache");
+    navigate("/login", { replace: true });
+  };
+
   const validateToken = () => {
     const token = Cookies.get("access_token");
     if (!token) {
-      // Cleanup before logout
-      Cookies.remove("access_token");
-      localStorage.removeItem("dashboardCache");
-      navigate("/login", { replace: true });
+      cleanupAndLogout();
       return false;
     }
     try {
       const decoded = jwtDecode(token);
       const now = Date.now() / 1000;
       if (decoded.exp < now) {
-        // Cleanup before logout
-        Cookies.remove("access_token");
-        localStorage.removeItem("dashboardCache");
-        localStorage.removeItem("provactiveCache");
-        navigate("/login", { replace: true });
+        cleanupAndLogout();
         return false;
       }
       setIsValid(true);
       return true;
     } catch (err) {
-      // Cleanup before logout
-      Cookies.remove("access_token");
-      localStorage.removeItem("dashboardCache");
-      localStorage.removeItem("provactiveCache");
-      navigate("/login", { replace: true });
+      cleanupAndLogout();
       return false;
     }
   };
@@ -46,20 +43,17 @@ const PrivateRoute = ({ children }) => {
       setIsValid(false);
       return;
     }
-
     // Periodic revalidation every 2 minutes (adjust as needed; e.g., 120000 ms)
     intervalRef.current = setInterval(() => {
       if (!validateToken()) {
         setIsValid(false);
       }
     }, 120000);
-
     // Optional: Recheck on window focus (e.g., tab switch)
     const handleFocus = () => {
       validateToken(); // Silent recheck; won't navigate if still valid
     };
     window.addEventListener("focus", handleFocus);
-
     // Cleanup
     return () => {
       if (intervalRef.current) {

@@ -36,6 +36,9 @@ import {
   BoltIcon,
   UserIcon,
   XMarkIcon,
+  ChevronDownIcon, // New: For drill-down indicators
+  HomeIcon, // New: For breadcrumb home
+  MicrophoneIcon, // New: For voice input
 } from "@heroicons/react/24/outline";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -44,6 +47,226 @@ import "react-toastify/dist/ReactToastify.css";
 // Assuming react-toastify is installed and imported for alerts
 // Import CSS for react-toastify if needed: import "react-toastify/dist/ReactToastify.css";
 const ResponsiveGridLayout = WidthProvider(Responsive);
+const DrillDownModal = React.memo(
+  ({
+    isOpen,
+    onClose,
+    drillData,
+    onDrillFurther,
+    breadcrumb,
+    onBreadcrumbClick,
+    isDrilling,
+  }) => {
+    if (!isOpen || !drillData) return null;
+    const {
+      title,
+      description,
+      data,
+      chart_config,
+      can_drill_further,
+      sql_query,
+    } = drillData;
+    return (
+      <div
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm"
+        onClick={onClose}
+      >
+        <div
+          className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl animate-fade-in-scale flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header with Breadcrumb */}
+          <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50">
+            <div className="flex items-center gap-4 flex-1 overflow-hidden">
+              <button
+                onClick={() => onBreadcrumbClick(0)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all duration-300 flex-shrink-0"
+              >
+                <HomeIcon className="h-4 w-4" />
+                <span>Dashboard</span>
+              </button>
+              {breadcrumb.slice(1).map((crumb, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 flex-shrink-0"
+                >
+                  <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+                  <button
+                    onClick={() => onBreadcrumbClick(idx + 1)}
+                    className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all duration-300 truncate max-w-xs"
+                    title={crumb.label}
+                  >
+                    {crumb.label}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-all duration-300 flex-shrink-0"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+          {/* Title */}
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+            {description && (
+              <p className="text-sm text-gray-600 mt-1">{description}</p>
+            )}
+          </div>
+          {/* Chart Content */}
+          <div className="flex-1 p-6 relative overflow-auto bg-white">
+            {isDrilling ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
+              </div>
+            ) : (
+              <>
+                <ErrorBoundary>
+                  <ChartRenderer
+                    kpi={{
+                      chart_type:
+                        chart_config?.chart_type || "vertical_bar_chart",
+                    }}
+                    data={data}
+                    chartConfig={chart_config || {}}
+                    onElementClick={
+                      can_drill_further
+                        ? (col, val) => onDrillFurther(col, val)
+                        : undefined
+                    }
+                  />
+                </ErrorBoundary>
+                {can_drill_further && (
+                  <div className="absolute top-4 right-4 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg animate-pulse">
+                    Click to drill deeper →
+                  </div>
+                )}
+                {!can_drill_further && (
+                  <div className="absolute bottom-4 right-4 bg-gray-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+                    📊 Detail Level
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          {/* Footer */}
+          <div className="p-6 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>SQL Query:</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(sql_query);
+                  toast.success("SQL copied!");
+                }}
+                className="text-indigo-600 hover:text-indigo-700 font-mono text-xs bg-indigo-100 px-2 py-1 rounded-lg transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  downloadCSV(data, `${title.replace(/[^a-z0-9]/gi, "_")}.csv`);
+                  toast.success("Data downloaded!");
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors text-sm font-medium"
+              >
+                Download Data
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+const SummaryModal = React.memo(({ isOpen, onClose, summary }) => {
+  if (!isOpen || !summary) return null;
+  const { title, alert_level, current_state, drivers } = summary;
+  const getAlertColor = (level) => {
+    switch (level) {
+      case "danger": return "from-red-500 to-red-600";
+      case "warning": return "from-yellow-500 to-yellow-600";
+      case "info": return "from-blue-500 to-blue-600";
+      default: return "from-gray-500 to-gray-600";
+    }
+  };
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl animate-fade-in-scale flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className={`p-6 border-b flex items-center justify-between ${alert_level ? `bg-gradient-to-r ${getAlertColor(alert_level)} text-white` : 'bg-gray-50'}`}>
+          <div className="flex items-center gap-3">
+            <InformationCircleIcon className="h-6 w-6" />
+            <h2 className="text-xl font-bold">{title}</h2>
+            {alert_level && (
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${alert_level === 'info' ? 'bg-blue-200 text-blue-800' : alert_level === 'warning' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>
+                {alert_level}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className={`p-2 rounded-xl transition-all duration-300 ${alert_level ? 'text-white/70 hover:text-white hover:bg-white/20' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
+        {/* Current State */}
+        {current_state && (
+          <div className="flex-1 p-6 space-y-6 overflow-auto">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Current State</h3>
+              {current_state.primary_metric && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-2xl border border-indigo-200/50">
+                  <p className="text-sm text-gray-600 mb-2">{current_state.primary_metric.label}</p>
+                  <p className="text-3xl font-bold text-gray-900">{current_state.primary_metric.value}</p>
+                </div>
+              )}
+              {current_state.secondary_metrics && current_state.secondary_metrics.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  {current_state.secondary_metrics.map((metric, idx) => (
+                    <div key={idx} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                      <p className="text-sm text-gray-600">{metric.label}</p>
+                      <p className="text-lg font-semibold text-gray-900">{metric.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Drivers */}
+            {drivers && drivers.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Key Drivers</h3>
+                <div className="space-y-4">
+                  {drivers.map((driver, idx) => (
+                    <div key={idx} className="bg-gradient-to-r from-gray-50 to-indigo-50 p-4 rounded-xl border border-gray-200">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">{driver.icon}</span>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900 mb-1">{driver.title}</h4>
+                          <p className="text-sm text-gray-600">{driver.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 const iconMap = {
   dollar: CurrencyDollarIcon,
   chart: ChartBarIcon,
@@ -203,12 +426,24 @@ export default function Dashboard() {
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [currentChartId, setCurrentChartId] = useState(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  // New: Drill-down states
+  const [showDrillModal, setShowDrillModal] = useState(false);
+  const [drillData, setDrillData] = useState(null);
+  const [drillBreadcrumb, setDrillBreadcrumb] = useState([]);
+  const [isDrilling, setIsDrilling] = useState(false);
   const [freeformMode, setFreeformMode] = useState(true); // Default to true for free rearrangement
   const [hasGenerated, setHasGenerated] = useState(false); // Flag to control initial layout generation
+  // New: Voice input states
+  const [isListening, setIsListening] = useState(false);
+  const [partialTranscript, setPartialTranscript] = useState("");
+  // New: Summary modal states
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [currentSummary, setCurrentSummary] = useState(null);
   const kpiMapRef = useRef(new Map());
   const orderedKpiIdsRef = useRef([]);
   const chartMapRef = useRef(new Map());
   const orderedChartIdsRef = useRef([]);
+  const recognitionRef = useRef(null);
   const requestBody = {
     persona: persona,
     goal: goal,
@@ -356,53 +591,231 @@ export default function Dashboard() {
       setCurrentChartId(null);
     }
   };
-  const processKpiCardData = (k, cardData) => {
-    let value = "N/A";
-    let change = null;
-    let changeType = null;
-    let period = safeFormatDate(new Date());
-    let subValue = null;
-    if (k.sql_error) {
-      value = "Error";
-      toast.error("An error occurred while loading KPI data.");
-    } else if (cardData) {
-      const mainValueKey = Object.keys(cardData).find(
-        (key) => key === "current" || key.startsWith("current_")
-      );
-      if (mainValueKey) {
-        value = cardData[mainValueKey];
-        // Ensure value is safe for rendering/formatting
-        if (value instanceof Date) {
-          value = safeFormatDate(value);
-        } else if (typeof value !== "number" && typeof value !== "string") {
-          value = String(value);
-        }
+  // Updated: Handle Drill-Down Click with validation
+  const handleDrillClick = useCallback(
+    async (chartId, selectedColumn, selectedValue) => {
+      console.log("🔍 Drill-down initiated:", {
+        chartId,
+        selectedColumn,
+        selectedValue,
+      });
+      if (!selectedColumn || selectedValue === undefined) {
+        toast.error(
+          "Invalid selection for drill-down. Please click a data element."
+        );
+        return;
       }
-      const pct = parseFloat(cardData.percentage_change) || 0;
-      change = `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
-      changeType = pct > 0 ? "positive" : pct < 0 ? "negative" : null;
-      const reqData = cardData.req_data;
-      if (reqData !== undefined && reqData !== null) {
-        if (typeof reqData === "number" && reqData > 1900 && reqData < 2100) {
-          period = `YTD ${reqData}`;
-        } else if (typeof reqData === "string" && !isNaN(Date.parse(reqData))) {
-          period = safeFormatDate(reqData);
-        } else {
-          // Handle Date object or other types safely
-          if (reqData instanceof Date) {
-            subValue = safeFormatDate(reqData);
-          } else {
-            subValue = String(reqData);
+      setIsDrilling(true);
+      const chart = chartMapRef.current.get(chartId);
+      if (!chart) {
+        console.error("❌ Chart not found:", chartId);
+        toast.error("Chart not found.");
+        setIsDrilling(false);
+        return;
+      }
+      if (!chart.drill_config?.enabled) {
+        console.log("❌ Drill-down not enabled for chart:", chartId);
+        toast.error("Drill-down not available for this chart.");
+        setIsDrilling(false);
+        return;
+      }
+      console.log("✅ Chart drill config:", chart.drill_config);
+      const requestBody = {
+        kpi_id: chart.kpi_id || chartId,
+        chart_type:
+          chart.kpi?.chart_type ||
+          chart.chart_config?.chart_type ||
+          "line_chart",
+        current_level: "summary",
+        selected_value: selectedValue,
+        selected_column: selectedColumn,
+        catalog: "finance_fusion_catalog",
+        schema: "finance_fusion_catalog",
+        persona: persona,
+        kpi_title: chart.kpi?.title || chart.chart_config?.title || "Untitled",
+        kpi_description: chart.kpi?.description || "",
+        original_sql: chart.sql_query || "",
+      };
+      console.log("📤 Sending drill-down request:", requestBody);
+      try {
+        const response = await fetch(`${API_BASE_URL}/drilldown/execute`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            authorization: `Bearer ${Cookies.get("access_token")}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("❌ API Error:", response.status, errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        const drillResponse = await response.json();
+        console.log("✅ Drill-down response:", drillResponse);
+        setDrillData(drillResponse);
+        setDrillBreadcrumb([
+          { level: "summary", label: chart.kpi?.title || "Dashboard" },
+          ...(drillResponse.breadcrumb || []),
+        ]);
+        setShowDrillModal(true);
+        toast.success("Drilled down successfully!");
+      } catch (error) {
+        console.error("❌ Drill-down error:", error);
+        toast.error(`Failed to drill down: ${error.message}`);
+      } finally {
+        setIsDrilling(false);
+      }
+    },
+    [persona]
+  );
+  // New: Handle Further Drill-Down in Modal
+  const handleFurtherDrill = useCallback(
+    async (selectedColumn, selectedValue) => {
+      console.log("🔍 Further drill initiated:", {
+        selectedColumn,
+        selectedValue,
+      });
+      if (!drillData || !drillData.can_drill_further) {
+        toast.info("Cannot drill further from this level.");
+        return;
+      }
+      setIsDrilling(true);
+      const requestBody = {
+        kpi_id: drillData.kpi_id || currentChartId,
+        chart_type: drillData.chart_config?.chart_type || "vertical_bar_chart",
+        current_level: drillData.level,
+        selected_value: selectedValue,
+        selected_column: selectedColumn,
+        catalog: "finance_fusion_catalog",
+        schema: "finance_fusion_catalog",
+        persona: persona,
+        kpi_title: drillData.title,
+        kpi_description: drillData.description || "",
+        original_sql: drillData.sql_query || "",
+      };
+      try {
+        const response = await fetch(`${API_BASE_URL}/drilldown/execute`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            authorization: `Bearer ${Cookies.get("access_token")}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const newDrillData = await response.json();
+        console.log("✅ Further drill response:", newDrillData);
+        setDrillData(newDrillData);
+        setDrillBreadcrumb([
+          ...drillBreadcrumb,
+          ...(newDrillData.breadcrumb?.slice(-1) || []),
+        ]);
+        toast.success("Drilled deeper!");
+      } catch (error) {
+        console.error("❌ Further drill error:", error);
+        toast.error("Failed to drill further.");
+      } finally {
+        setIsDrilling(false);
+      }
+    },
+    [drillData, drillBreadcrumb, persona, currentChartId]
+  );
+  // New: Handle Breadcrumb Navigation
+  const handleBreadcrumbClick = useCallback((index) => {
+    console.log("🏠 Breadcrumb clicked:", index);
+    setShowDrillModal(false);
+    setDrillData(null);
+    setDrillBreadcrumb([]);
+    toast.info("Returned to dashboard.");
+  }, []);
+  // New: Handle Summary Modal
+  const handleOpenSummary = useCallback((summary) => {
+    setCurrentSummary(summary);
+    setShowSummaryModal(true);
+  }, []);
+  const handleCloseSummary = useCallback(() => {
+    setShowSummaryModal(false);
+    setCurrentSummary(null);
+  }, []);
+  // Updated: Updated processKpiCardData to handle the new array-based data format
+  const processKpiCardData = (k) => {
+    let value = null;
+    let formattedValue = "N/A";
+    let change = null;
+    let formattedComparison = null;
+    let changeType = null;
+    let period = safeFormatDate(new Date()); // Default to current date if no specific period
+    let detailLine1 = null;
+    let detailLine2 = null;
+    let hasError = false;
+    // Check for errors first
+    if (k.has_error || k.sql_error || !k.data || k.data.length === 0) {
+      hasError = true;
+      value = null;
+      formattedValue = "Error";
+      toast.error("An error occurred while loading KPI data.");
+    } else {
+      // Extract from the first row of data array
+      const row = k.data[0];
+      if (row && row.value !== null && row.value !== undefined) {
+        // Format value based on title (assume currency for financial KPIs)
+        const isCurrency = isCurrencyKPI(k.title);
+        formattedValue = formatNumber(row.value, {
+          prefix: isCurrency ? "₹" : "",
+          suffix: "",
+          decimals: 2,
+          currency: isCurrency,
+        });
+        value = row.value; // Raw value for internal use
+        // Handle comparison: comparison_value is the ratio (e.g., -0.564 for -56.4%)
+        if (row.comparison_value && row.comparison_label) {
+          const ratio = parseFloat(row.comparison_value);
+          if (!isNaN(ratio)) {
+            const pctChange = ratio * 100;
+            change = `${pctChange > 0 ? "+" : ""}${Math.round(pctChange)}%`;
+            changeType = pctChange > 0 ? "positive" : (pctChange < 0 ? "negative" : null);
+          }
+          formattedComparison = row.comparison_label || "vs previous period";
+        }
+        // Detail lines from row
+        detailLine1 = row.detail_line_1 || null;
+        detailLine2 = row.detail_line_2 || null;
+        // Extract period from detail_line_1 if available (e.g., "Period: 2025-12-01")
+        if (detailLine1 && detailLine1.includes("Period:")) {
+          const periodMatch = detailLine1.match(/Period:\s*(.+?)(?:,|\s*$)/);
+          if (periodMatch) {
+            period = safeFormatDate(periodMatch[1].trim());
           }
         }
+      } else {
+        // Handle null/empty row values
+        formattedValue = "N/A";
+        value = null;
       }
     }
-    // Ensure all are strings
-    value = String(value || "N/A");
+    // Ensure all are strings for rendering
+    formattedValue = String(formattedValue || "N/A");
     change = String(change || "");
+    formattedComparison = String(formattedComparison || "");
     period = String(period || "");
-    subValue = subValue ? String(subValue) : null;
-    return { value, change, changeType, period, subValue };
+    detailLine1 = detailLine1 ? String(detailLine1) : null;
+    detailLine2 = detailLine2 ? String(detailLine2) : null;
+    return {
+      value,
+      formattedValue,
+      change,
+      formattedComparison,
+      changeType,
+      period,
+      detailLine1,
+      detailLine2,
+      hasError,
+      metricType: isCurrencyKPI(k.title) ? "currency" : "number", // Infer metric type
+      formatConfig: { show_trend: true }, // Default to show trend for comparisons
+    };
   };
   const generateDashboard = async () => {
     if (!goal.trim()) {
@@ -420,7 +833,7 @@ export default function Dashboard() {
     syncStateFromRefs();
     try {
       const response = await fetch(
-        `${API_BASE_URL}/dashboards/process-kpis-concurrent`,
+        `${API_BASE_URL}/dashboards/process-kpis-with-summaries`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -471,36 +884,6 @@ export default function Dashboard() {
       case "progress":
         setProgress(data.progress || 0);
         if (data.message) setMessage(data.message);
-        if (data.kpi_cards?.length) {
-          data.kpi_cards.forEach((k) => {
-            const id =
-              k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
-            if (!orderedKpiIdsRef.current.includes(id))
-              orderedKpiIdsRef.current.push(id);
-            let cardData = k.data && k.data.length > 0 ? k.data[0] : null;
-            const { value, change, changeType, period, subValue } =
-              processKpiCardData(k, cardData);
-            kpiMapRef.current.set(id, {
-              ...k,
-              id,
-              isKpiCard: true,
-              value,
-              change,
-              changeType,
-              period,
-              subValue,
-              sql_error: k.sql_error,
-            });
-          });
-        }
-        if (data.kpis?.length) {
-          data.kpis.forEach((k) => {
-            const id = k.id || k.title || JSON.stringify(k);
-            if (!orderedKpiIdsRef.current.includes(id))
-              orderedKpiIdsRef.current.push(id);
-            kpiMapRef.current.set(id, { ...k, id, isKpiCard: false });
-          });
-        }
         if (data.kpi_summaries?.length) {
           data.kpi_summaries.forEach((s) => {
             const id = s.id || s.title || JSON.stringify(s);
@@ -513,34 +896,36 @@ export default function Dashboard() {
               isKpiCard: false,
             });
           });
+          syncStateFromRefs();
         }
-        syncStateFromRefs();
         break;
-      case "kpi_cards":
+      case "card_progress":
         setProgress(data.progress || 0);
         if (data.message) setMessage(data.message);
-        if (data.kpi_cards?.length) {
-          data.kpi_cards.forEach((k) => {
-            const id =
-              k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
-            if (!orderedKpiIdsRef.current.includes(id))
-              orderedKpiIdsRef.current.push(id);
-            let cardData = k.data && k.data.length > 0 ? k.data[0] : null;
-            const { value, change, changeType, period, subValue } =
-              processKpiCardData(k, cardData);
-            kpiMapRef.current.set(id, {
-              ...k,
-              id,
-              isKpiCard: true,
-              value,
-              change,
-              changeType,
-              period,
-              subValue,
-              sql_error: k.sql_error,
-            });
+        if (data.card) {
+          const k = data.card;
+          const id = k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
+          if (!orderedKpiIdsRef.current.includes(id))
+            orderedKpiIdsRef.current.push(id);
+          // Updated: Process the card data directly (no second param needed)
+          const processedData = processKpiCardData(k);
+          kpiMapRef.current.set(id, {
+            ...k,
+            id,
+            isKpiCard: true,
+            ...processedData, // Spread the processed fields
+            sql_error: k.sql_error,
+            has_error: data.has_error,
           });
           syncStateFromRefs();
+        }
+        break;
+      case "cards_complete":
+        setProgress(data.progress || 0);
+        if (data.message) setMessage(data.message);
+        // Note the completion of cards, update message if needed
+        if (data.successful_cards === 0) {
+          toast.warning(`All ${data.total_cards} KPI cards encountered errors.`);
         }
         break;
       case "kpi_complete": {
@@ -563,6 +948,10 @@ export default function Dashboard() {
           ...item,
           kpi_id: id,
           kpi: item.kpi || kpiMapRef.current.get(id),
+          data: item.data || [],
+          chart_config: item.chart_config || {},
+          sql_query: item.sql_query || "",
+          error: item.error,
         });
         if (!orderedChartIdsRef.current.includes(id))
           orderedChartIdsRef.current.push(id);
@@ -617,22 +1006,21 @@ export default function Dashboard() {
             : data.message || "Complete!"
         );
         const finalRes = data.result;
-        if (finalRes?.dashboard_config) {
-          finalRes.dashboard_config.forEach((item) => {
-            const id =
-              item.kpi?.id || item.kpi_id || JSON.stringify(item.kpi || item);
+        if (finalRes?.kpi_cards?.length) {
+          finalRes.kpi_cards.forEach((k) => {
+            const id = k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
             if (!orderedKpiIdsRef.current.includes(id))
               orderedKpiIdsRef.current.push(id);
-            if (item.kpi)
-              kpiMapRef.current.set(id, { ...item.kpi, id, isKpiCard: false });
-            if (!chartMapRef.current.has(id))
-              chartMapRef.current.set(id, {
-                ...item,
-                kpi_id: id,
-                kpi: item.kpi || kpiMapRef.current.get(id),
-              });
-            if (!orderedChartIdsRef.current.includes(id))
-              orderedChartIdsRef.current.push(id);
+            // Updated: Process each final KPI card
+            const processedData = processKpiCardData(k);
+            kpiMapRef.current.set(id, {
+              ...k,
+              id,
+              isKpiCard: true,
+              ...processedData,
+              sql_error: k.sql_error,
+              has_error: k.has_error || false, // Use from card, not hardcoded
+            });
           });
           syncStateFromRefs();
         }
@@ -654,6 +1042,109 @@ export default function Dashboard() {
       generateDashboard();
     }
   };
+  // Updated: Voice input handler with robustness
+  const startVoiceInput = useCallback(() => {
+    if (isListening) {
+      // Stop if already listening
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      setPartialTranscript("");
+      return;
+    }
+    if (
+      !("webkitSpeechRecognition" in window) &&
+      !("SpeechRecognition" in window)
+    ) {
+      toast.error(
+        "Speech recognition not supported in this browser. Please use Chrome or Edge."
+      );
+      return;
+    }
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true; // Enable partial results for real-time feedback
+    recognition.continuous = false; // Single utterance for goal input
+    recognition.maxAlternatives = 1;
+    // Visual feedback
+    setIsListening(true);
+    setPartialTranscript("");
+    recognition.onstart = () => {
+      console.log("Voice recognition started");
+      toast.info("Listening... Speak your goal now.");
+    };
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      // Update partial for real-time preview
+      setPartialTranscript(interimTranscript);
+      // Set final result
+      if (finalTranscript) {
+        setGoal(finalTranscript);
+        setPartialTranscript("");
+        toast.success("Goal set from voice input!");
+      }
+    };
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+      setPartialTranscript("");
+      let errorMessage = "Voice input error. ";
+      switch (event.error) {
+        case "not-allowed":
+          errorMessage +=
+            "Microphone permission denied. Please allow access and try again.";
+          break;
+        case "no-speech":
+          errorMessage +=
+            "No speech detected. Please speak louder or closer to the mic.";
+          break;
+        case "audio-capture":
+          errorMessage += "Microphone issue. Check your audio settings.";
+          break;
+        case "network":
+          errorMessage += "Network error. Check your connection.";
+          break;
+        default:
+          errorMessage += event.error;
+      }
+      toast.error(errorMessage);
+    };
+    recognition.onend = () => {
+      console.log("Voice recognition ended");
+      setIsListening(false);
+      setPartialTranscript("");
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+    };
+    // Handle stopping
+    const handleStop = () => {
+      recognition.stop();
+    };
+    // Cleanup on unmount or stop
+    recognitionRef.current = recognition;
+    // Start recognition
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error("Failed to start recognition:", err);
+      setIsListening(false);
+      toast.error("Failed to start voice input. Please try again.");
+    }
+    // Optional: Add global stop listener (e.g., on spacebar or something, but for now, button toggle)
+  }, [isListening]);
   // Load role from token on mount
   useEffect(() => {
     const role = getRoleFromToken();
@@ -676,7 +1167,9 @@ export default function Dashboard() {
         kpiMapRef.current.clear();
         orderedKpiIdsRef.current = [];
         cachedKpis.forEach((k) => {
-          kpiMapRef.current.set(k.id, { ...k });
+          // Re-process cached KPIs with new format handler if needed
+          const processed = k.isKpiCard ? processKpiCardData(k) : {};
+          kpiMapRef.current.set(k.id, { ...k, ...processed });
           orderedKpiIdsRef.current.push(k.id);
         });
         chartMapRef.current.clear();
@@ -739,17 +1232,16 @@ export default function Dashboard() {
     const LG_COLS = 12;
     const MD_COLS = 12;
     const SM_COLS = 6;
-    const KPI_WIDTH_LG = 4; // Exactly 3 per row: 12 / 4 = 3
-    const KPI_HEIGHT_LG = 4; // Decreased height for more compact KPI cards
-    const KPI_WIDTH_MD = 4; // Same for md
-    const KPI_HEIGHT_MD = 4; // Decreased height for more compact KPI cards
+    const KPI_WIDTH_LG = 3; // Adjusted for 4 per row: 12 / 4 = 3
+  const KPI_HEIGHT_LG = 4; // Slightly increased to reduce cramped layout
+    const KPI_WIDTH_MD = 3; // Same for md: 4 per row
+  const KPI_HEIGHT_MD = 4;
     const KPI_WIDTH_SM = 3; // 6 / 3 = 2 per row on sm
-    const KPI_HEIGHT_SM = 4; // Decreased height for more compact KPI cards
-    const KPIS_PER_ROW_LG = 3;
-    const KPIS_PER_ROW_MD = 3;
+  const KPI_HEIGHT_SM = 4;
+    const KPIS_PER_ROW_LG = 4; // Maximum 4 per row
+    const KPIS_PER_ROW_MD = 4;
     const KPIS_PER_ROW_SM = 2;
-    
-    const CHART_WIDTH_LG = 6; 
+    const CHART_WIDTH_LG = 6;
     const CHART_HEIGHT_LG = 8; // Reduced height for more compact layout while maintaining good aspect ratio for financial charts
     const CHARTS_PER_ROW_LG = 2;
     const CHART_WIDTH_MD = 6;
@@ -757,15 +1249,13 @@ export default function Dashboard() {
     const CHARTS_PER_ROW_MD = 2;
     const CHART_WIDTH_SM = 6; // Full width
     const CHART_HEIGHT_SM = 10; // Reduced height on mobile for better scrolling without excessive vertical space
-   
-    const KPI_MAX_W_LG = 6; // 
-    const KPI_MAX_H_LG = 6; // 
-    const CHART_MAX_W_LG = 12; // 
-    const CHART_MAX_H_LG = 16; // 
+    const KPI_MAX_W_LG = 6; //
+    const KPI_MAX_H_LG = 6; //
+    const CHART_MAX_W_LG = 12; //
+    const CHART_MAX_H_LG = 16; //
     const cardIds = orderedKpiIdsRef.current.filter(
       (id) => kpiMapRef.current.get(id)?.isKpiCard
     );
-  
     cardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
@@ -773,14 +1263,13 @@ export default function Dashboard() {
         y: Math.floor(i / KPIS_PER_ROW_LG) * KPI_HEIGHT_LG,
         w: KPI_WIDTH_LG,
         h: KPI_HEIGHT_LG,
-        minW: 3, // 
+        minW: 2, // Slightly lower min for flexibility
         maxW: KPI_MAX_W_LG,
-        minH: 3, // 
-        maxH: KPI_MAX_H_LG, 
+  minH: 3, // restore sensible minimum height
+        maxH: KPI_MAX_H_LG,
       };
       lg.push(item);
     });
-    
     cardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
@@ -788,10 +1277,10 @@ export default function Dashboard() {
         y: Math.floor(i / KPIS_PER_ROW_MD) * KPI_HEIGHT_MD,
         w: KPI_WIDTH_MD,
         h: KPI_HEIGHT_MD,
-        minW: 3,
-        maxW: KPI_MAX_W_LG, 
-        minH: 3, 
-        maxH: KPI_MAX_H_LG, 
+        minW: 2,
+        maxW: KPI_MAX_W_LG,
+  minH: 3,
+        maxH: KPI_MAX_H_LG,
       };
       md.push(item);
     });
@@ -805,7 +1294,7 @@ export default function Dashboard() {
         h: KPI_HEIGHT_SM,
         minW: 2,
         maxW: 4, // Slightly increased
-        minH: 3, // Adjusted minH to match decreased height
+  minH: 3, // Adjusted minH to match slightly increased height
         maxH: 6, // Increased
       });
     });
@@ -918,32 +1407,6 @@ export default function Dashboard() {
     // Auto-save to localStorage
     localStorage.setItem("customLayout", JSON.stringify(allLayouts));
   }, []);
-  const toggleChartSize = useCallback((id) => {
-    setLayouts((prevLayouts) => {
-      const newLg = prevLayouts.lg.map((item) => {
-        if (item.i === `chart-${id}`) {
-          return {
-            ...item,
-            w: item.w === 6 ? 12 : 6,
-            h: item.h === 8 ? 16 : 8,
-          };
-        }
-        return item;
-      });
-      // Mirror to md for consistency
-      const newMd = prevLayouts.md.map((item) => {
-        if (item.i === `chart-${id}`) {
-          return {
-            ...item,
-            w: item.w === 6 ? 12 : 6,
-            h: item.h === 8 ? 16 : 8,
-          };
-        }
-        return item;
-      });
-      return { ...prevLayouts, lg: newLg, md: newMd };
-    });
-  }, []);
   const ChartsList = useMemo(
     () =>
       charts.map((chart) => {
@@ -952,6 +1415,7 @@ export default function Dashboard() {
           chart.chart_config?.title || chart.kpi?.title || "Untitled Chart";
         const subtitle = chart.chart_config?.subtitle || "";
         const description = chart.kpi?.description || "";
+        const drillEnabled = true; // Enabled by default for all charts to make them clickable
         return (
           <div key={`chart-${id}`}>
             <div className="group/chart bg-purple-100/90 hover:bg-purple-100/95 transition-colors duration-500 rounded-3xl border border-white/40 shadow-2xl h-full flex flex-col overflow-hidden cursor-move hover:shadow-3xl hover:shadow-purple-200/50 backdrop-blur-xl">
@@ -1050,17 +1514,20 @@ export default function Dashboard() {
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          toggleChartSize(id);
+                          // Demo with example values (fallback if no click)
+                          const demoColumn = "bucket";
+                          const demoValue = "0-30";
+                          handleDrillClick(id, demoColumn, demoValue);
                         }}
                         onMouseDown={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
                         }}
-                        className="group relative text-gray-400 hover:text-blue-500 p-1.5 rounded-xl hover:bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 hover:shadow-md hover:shadow-blue-100/50 transition-all duration-300 active:scale-95"
-                        title="Toggle Size (Compact / Full)"
-                        aria-label="Toggle chart size"
+                        className="group relative text-gray-400 hover:text-indigo-600 p-1.5 rounded-xl hover:bg-indigo-50/80 backdrop-blur-sm border border-indigo-200/50 hover:shadow-md hover:shadow-indigo-100/50 transition-all duration-300 active:scale-95"
+                        title="Demo Drill-Down (click chart for real data)"
+                        aria-label="Demo drill down into data"
                       >
-                        <ArrowUpIcon className="h-4 w-4" />
+                        <ChevronDownIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={(e) => {
@@ -1123,6 +1590,22 @@ export default function Dashboard() {
                       }
                       data={chart.data}
                       chartConfig={chart.chart_config || {}}
+                      onElementClick={
+                        drillEnabled
+                          ? (selectedColumn, selectedValue) => {
+                              console.log("🎯 Chart element clicked:", {
+                                chartId: id,
+                                selectedColumn,
+                                selectedValue,
+                              });
+                              handleDrillClick(
+                                id,
+                                selectedColumn,
+                                selectedValue
+                              );
+                            }
+                          : undefined
+                      }
                       // Pass enhanced tooltip config to ChartRenderer if it supports it
                       tooltipConfig={{
                         // Example config for improved tooltips in ChartRenderer
@@ -1159,6 +1642,11 @@ export default function Dashboard() {
                         showArrow: true,
                       }}
                     />
+                    {/* {drillEnabled && (
+                      <div className="absolute top-4 right-4 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg animate-pulse">
+                        Click to drill down →
+                      </div>
+                    )} */}
                   </ErrorBoundary>
                 )}
               </div>
@@ -1166,7 +1654,7 @@ export default function Dashboard() {
           </div>
         );
       }),
-    [charts, isRegenerating]
+    [charts, isRegenerating, handleDrillClick]
   ); // Memoize the entire charts list to prevent re-renders on modal state changes
   const sidebarLeftClass = isCollapsed ? "left-20" : "left-64";
   return (
@@ -1184,7 +1672,7 @@ export default function Dashboard() {
               {getPersonaDisplayName(persona)} Financial Dashboard
             </h1>
             <p className="text-sm text-gray-600 mt-2 font-medium backdrop-blur-sm bg-white/60 px-3 py-1 rounded-full inline-block">
-              {message}
+              Click 'Generate Dashboard' to start
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
@@ -1258,16 +1746,37 @@ export default function Dashboard() {
                 <input
                   id="goal"
                   type="text"
-                  value={goal}
+                  value={isListening ? partialTranscript : goal}
                   onKeyDown={handleKeyDown}
                   onChange={(e) => setGoal(e.target.value)}
-                  className={`block w-full rounded-2xl border-2 px-5 py-4 pr-12 shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 sm:text-sm transition-all duration-500 ${
+                  className={`block w-full rounded-2xl border-2 px-5 py-4 pr-20 shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 sm:text-sm transition-all duration-500 ${
                     !goal.trim() && isGenerating
                       ? "border-red-300 focus:ring-red-200 focus:border-red-500 bg-red-50/50"
                       : "border-gray-200/60 focus:border-indigo-500 hover:border-indigo-300/50 hover:shadow-xl hover:shadow-indigo-100/30 bg-white/50"
+                  } ${
+                    isListening
+                      ? "border-indigo-500 bg-indigo-50/20 animate-pulse"
+                      : ""
                   }`}
                   placeholder="e.g., Gain insights into vendor distribution and supply chain efficiency"
                 />
+                <button
+                  type="button"
+                  onClick={startVoiceInput}
+                  className={`absolute inset-y-0 right-12 flex items-center pr-4 transition-all duration-300 ${
+                    isListening
+                      ? "text-red-500 animate-pulse"
+                      : "text-gray-400 hover:text-indigo-500"
+                  }`}
+                  title={isListening ? "Stop listening" : "Start voice input"}
+                  aria-label={
+                    isListening ? "Stop voice input" : "Start voice input"
+                  }
+                >
+                  <MicrophoneIcon
+                    className={`h-5 w-5 ${isListening ? "animate-bounce" : ""}`}
+                  />
+                </button>
                 <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
                   <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 transition-colors duration-300 group-hover:text-indigo-500" />
                 </div>
@@ -1275,6 +1784,12 @@ export default function Dashboard() {
               {!goal.trim() && (
                 <p className="mt-2 text-sm text-red-600 font-medium bg-red-50/80 px-3 py-2 rounded-xl border border-red-200/50">
                   Please enter a goal to generate the dashboard.
+                </p>
+              )}
+              {isListening && (
+                <p className="mt-2 text-sm text-indigo-600 font-medium bg-indigo-50/80 px-3 py-2 rounded-xl border border-indigo-200/50 flex items-center gap-2">
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping" />
+                  Listening... Speak clearly.
                 </p>
               )}
               <p className="mt-3 text-xs text-gray-500">
@@ -1306,7 +1821,7 @@ export default function Dashboard() {
                     <span>Generating Insights</span>
                   </div>
                 )}
-                {message}
+              
               </span>
               <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-pink-600 bg-clip-text text-transparent drop-shadow-sm">
                 {progress}%
@@ -1333,24 +1848,28 @@ export default function Dashboard() {
             key={resetKey}
             className="layout"
             layouts={layouts}
-            breakpoints={{ lg: 1200, md: 900, sm: 768 }} // ✅ FIX: Lowered md breakpoint to 900 to maintain 2 charts per row even with expanded sidebar (1200-256=944 >900)
+            breakpoints={{ lg: 1200, md: 900, sm: 768 }}
             cols={{ lg: 12, md: 12, sm: 6 }}
-            rowHeight={45} // Increased for more vertical breathing room and better proportions
-            margin={[20, 30]} // Adjusted margins: tighter horizontal, more vertical for elegant spacing
-            containerPadding={[20, 20]} // Consistent padding
+            rowHeight={44}
+            margin={[18, 26]}
+            containerPadding={[16, 16]}
             isDraggable
             isResizable
-            compactType={freeformMode ? null : "vertical"} // No compaction in freeform for true freedom
-            isBounded={!freeformMode} // Bound to container for polished UX, prevents overflow
-            preventCollision={!freeformMode} // Avoid overlaps during drag/resize for smoother interaction
+            compactType={freeformMode ? null : "vertical"}
+            isBounded={!freeformMode}
+            preventCollision={!freeformMode}
             onLayoutChange={handleLayoutChange}
+            // ✅ PERF: Re-enabled useCSSTransforms={true} for GPU-accelerated positioning, reducing JS reflows during drag/resize
+            // If child pointer events still conflict, combine with higher z-index on children or dragHandleClass
+            useCSSTransforms={true}
+            // ✅ PERF: Added measureBeforeMount={false} to skip initial measurement if layouts are pre-computed
+            measureBeforeMount={false}
           >
             {kpis
               .filter((k) => k.isKpiCard)
               .map((kpi) => {
-                const Icon = iconMap[kpi.icon] || CurrencyDollarIcon;
-                const isCurrency = isCurrencyKPI(kpi.title);
-                const hasError = kpi.sql_error || kpi.value === "Error";
+                const isCurrency = isCurrencyKPI(kpi.title) || kpi.metricType === "currency";
+                const hasError = kpi.hasError || kpi.sql_error || kpi.formattedValue === "Error" || kpi.formattedValue === "N/A";
                 const bgGradient = hasError
                   ? "from-red-50/80 via-red-100/80 to-red-50/80"
                   : isCurrency
@@ -1361,6 +1880,9 @@ export default function Dashboard() {
                   : isCurrency
                   ? "from-emerald-600 to-emerald-700"
                   : "from-indigo-600 via-purple-600 to-pink-600";
+                // Prepare a cleaned comparison label (remove parenthetical dates like '(2025-11-01 00:00:00+00)')
+                const rawComparisonLabel = kpi.formattedComparison || kpi.comparison_label || "vs previous";
+                const displayComparisonLabel = String(rawComparisonLabel).replace(/\s*\(.*?\)/, "").trim();
                 return (
                   <div key={`kpi-${kpi.id}`}>
                     <ErrorBoundary
@@ -1372,123 +1894,100 @@ export default function Dashboard() {
                       }
                     >
                       <div
-                        className={`group relative rounded-3xl border border-white/40 shadow-2xl h-full p-6 cursor-move hover:shadow-3xl hover:shadow-indigo-200/50 transition-all duration-700 flex flex-col justify-between overflow-hidden bg-gradient-to-br ${bgGradient} backdrop-blur-xl hover:-translate-y-2 active:scale-[0.98]`}
+                        className={`group relative rounded-3xl border border-white/40 shadow-2xl h-full p-4 cursor-move hover:shadow-3xl hover:shadow-indigo-200/50 transition-all duration-700 flex flex-col justify-between overflow-hidden bg-gradient-to-br ${bgGradient} backdrop-blur-xl hover:-translate-y-2 active:scale-[0.98]`}
                       >
                         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <div className="flex flex-col h-full relative z-10">
-                          <div className="flex items-start justify-between mb-4 gap-4">
-                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                              <div className="relative flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex-shrink-0 shadow-lg border border-white/40 group-hover:scale-110 transition-transform duration-300">
-                                <Icon className="h-6 w-6 text-indigo-500 drop-shadow-sm" />
-                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                              </div>
-                              <div className="flex flex-col flex-1 min-w-0">
-                                <h3
-                                  className="text-base sm:text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent leading-tight line-clamp-2"
-                                  title={kpi.title}
-                                >
-                                  {kpi.title}
-                                </h3>
-                                {kpi.description && (
-                                  <div
-                                    className="relative group/kpi-icon mt-2 flex-shrink-0"
-                                    role="tooltip"
-                                    aria-label="KPI description"
-                                  >
-                                    <InformationCircleIcon className="h-4 w-4 text-gray-400 cursor-help flex-shrink-0 transition-all duration-300 group-hover/kpi-icon:scale-110 group-hover/kpi-icon:text-indigo-500" />
-                                    <div className="invisible group-hover/kpi-icon:visible absolute -top-10 right-0 bg-gradient-to-r from-gray-900/95 to-gray-800/95 text-white text-xs px-4 py-3 rounded-2xl z-[9999] whitespace-pre-wrap max-w-md shadow-2xl backdrop-blur-md border border-white/30 transition-all duration-300 opacity-0 group-hover/kpi-icon:opacity-100 group-hover/kpi-icon:translate-y-2">
-                                      {/* Arrow for better UX */}
-                                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2">
-                                        <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-gray-900/95" />
-                                      </div>
-                                      <p className="relative z-10 leading-relaxed">
-                                        {kpi.description}
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                deleteItem(kpi.id, true);
-                              }}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                              }}
-                              className="relative flex-shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all duration-300 p-2 rounded-2xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md hover:shadow-red-100/50"
-                              title="Delete KPI"
-                              aria-label="Delete this KPI"
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-3 mt-auto mb-6 flex-wrap">
-                            <span className="text-xs text-gray-500 font-semibold bg-white/40 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/30">
-                              {kpi.period || "N/A"}
-                            </span>
-                            {kpi.subValue && (
-                              <span className="text-xs text-gray-400 font-medium bg-gray-100/60 px-2 py-1 rounded-lg">
-                                {kpi.subValue}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex-1 flex items-end justify-between gap-4">
-                            <div className="flex flex-col items-start flex-1 min-w-0">
-                              <span
-                                className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r ${textGradient} bg-clip-text text-transparent leading-tight drop-shadow-lg`}
+                          {/* Simplified: Only title at top */}
+                          <div className="mb-4 flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h3
+                                className="text-base sm:text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent leading-tight truncate"
+                                title={kpi.title}
                               >
-                                {hasError
-                                  ? "Error"
-                                  : (() => {
-                                      try {
-                                        return formatNumber(
-                                          kpi.value,
-                                          isCurrency
-                                        );
-                                      } catch (err) {
-                                        console.warn(
-                                          `formatNumber failed for KPI "${kpi.title}":`,
-                                          err,
-                                          kpi.value
-                                        );
-                                        if (typeof kpi.value === "string") {
-                                          const num = parseFloat(kpi.value);
-                                          return isNaN(num)
-                                            ? kpi.value
-                                            : num.toLocaleString("en-US", {
-                                                maximumFractionDigits: 2,
-                                              });
-                                        }
-                                        return typeof kpi.value === "number"
-                                          ? kpi.value.toLocaleString()
-                                          : "N/A";
-                                      }
-                                    })()}
-                              </span>
+                                {kpi.title}
+                              </h3>
+                              {kpi.description && (
+                                <p
+                                  className="text-xs text-gray-600 mt-1 truncate"
+                                  title={kpi.description}
+                                >
+                                  {kpi.description}
+                                </p>
+                              )}
                             </div>
-                            {kpi.change && (
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {kpi.summary && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleOpenSummary(kpi.summary);
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                  }}
+                                  className="relative opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-500 transition-all duration-300 p-2 rounded-2xl hover:bg-indigo-50/80 backdrop-blur-sm border border-indigo-200/50 hover:shadow-md hover:shadow-indigo-100/50"
+                                  title="View Summary"
+                                  aria-label="View KPI summary"
+                                >
+                                  <InformationCircleIcon className="h-4 w-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  deleteItem(kpi.id, true);
+                                }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                }}
+                                className="relative opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all duration-300 p-2 rounded-2xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md hover:shadow-red-100/50"
+                                title="Delete KPI"
+                                aria-label="Delete this KPI"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                          {/* Simplified: Only value and change */}
+                          <div className="flex-1 flex flex-col items-start justify-end gap-3">
+                            <span
+                              className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r ${textGradient} bg-clip-text text-transparent leading-tight drop-shadow-lg animate-fade-in-up`}
+                            >
+                              {hasError ? "Error" : kpi.formattedValue}
+                            </span>
+                            {/* Change indicator with improved UX: Larger, with icon and subtle animation */}
+                            {kpi.change && kpi.formatConfig?.show_trend && (
                               <div
-                                className={`relative flex flex-col items-end p-3 rounded-2xl shadow-lg transition-all duration-500 min-w-0 flex-shrink-0 ${
+                                className={`relative flex items-center gap-2 p-4 rounded-2xl shadow-lg transition-all duration-500 min-w-0 flex-shrink-0 ${
                                   kpi.changeType === "positive"
-                                    ? "bg-gradient-to-br from-emerald-50/90 to-emerald-100/90 border border-emerald-200/60 text-emerald-700 hover:from-emerald-100/90 hover:to-emerald-200/90 hover:shadow-emerald-200/50"
-                                    : "bg-gradient-to-br from-red-50/90 to-red-100/90 border border-red-200/60 text-red-700 hover:from-red-100/90 hover:to-red-200/90 hover:shadow-red-200/50"
+                                    ? "bg-gradient-to-br from-emerald-50/90 to-emerald-100/90 border border-emerald-200/60 text-emerald-700 hover:from-emerald-100/90 hover:to-emerald-200/90 hover:shadow-emerald-200/50 animate-pulse-subtle"
+                                    : "bg-gradient-to-br from-red-50/90 to-red-100/90 border border-red-200/60 text-red-700 hover:from-red-100/90 hover:to-red-200/90 hover:shadow-red-200/50 animate-pulse-subtle"
                                 }`}
                               >
-                                <span className="text-sm font-bold flex items-center gap-1">
+                                <div className={`flex-shrink-0 ${kpi.changeType === "positive" ? "text-emerald-500" : "text-red-500"}`}>
                                   {kpi.changeType === "positive" ? (
-                                    <ArrowUpIcon className="h-4 w-4" />
+                                    <ArrowUpIcon className="h-5 w-5 animate-bounce-subtle" />
                                   ) : (
-                                    <ArrowDownIcon className="h-4 w-4" />
+                                    <ArrowDownIcon className="h-5 w-5 animate-bounce-subtle" />
                                   )}
+                                </div>
+                                <div className="text-lg font-bold">
                                   {kpi.change}
-                                </span>
-                                <span className="text-xs text-gray-500 font-medium">
-                                  vs last period
-                                </span>
+                                </div>
+                                <div className="text-xs text-gray-500 font-medium ml-auto truncate" title={rawComparisonLabel}>
+                                  {displayComparisonLabel}
+                                </div>
+                              </div>
+                            )}
+                            {/* If no change, show neutral placeholder */}
+                            {!kpi.change && !hasError && (
+                              <div className="text-sm text-gray-500 font-medium bg-gray-100/60 px-4 py-2 rounded-xl">
+                                No change data
                               </div>
                             )}
                           </div>
@@ -1547,116 +2046,115 @@ export default function Dashboard() {
             className="fixed inset-0 flex items-center justify-center z-[10000] p-4 animate-fade-in-scale"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-              <div className="flex justify-between items-center p-6 border-b border-gray-100/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
+            <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-3xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden shadow-2xl border border-white/40 backdrop-blur-xl">
+              <div className="flex justify-between items-center p-6 border-b border-white/40 bg-gradient-to-r from-indigo-100/80 via-purple-100/80 to-pink-100/80 backdrop-blur-sm">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
                   <MagnifyingGlassIcon className="h-7 w-7 text-indigo-600 drop-shadow-sm" />
                   {currentTitle} Data Explorer
                 </h2>
                 <button
                   onClick={() => setShowDataModal(false)}
-                  className="group relative px-4 py-2 text-gray-500 hover:text-gray-700 font-semibold rounded-xl hover:bg-gray-100/80 backdrop-blur-sm border border-gray-200/50 transition-all duration-300 hover:shadow-md hover:shadow-gray-100/50 active:scale-95"
+                  className="group relative px-4 py-2 text-gray-500 hover:text-gray-700 font-semibold rounded-xl hover:bg-white/50 backdrop-blur-sm border border-gray-200/50 transition-all duration-300 hover:shadow-md hover:shadow-gray-100/50 active:scale-95"
                 >
                   <XMarkIcon className="h-5 w-5" />
                 </button>
               </div>
               {currentData.length > 0 ? (
                 <>
-                  <div className="overflow-auto flex-1">
-                    <div className="px-6 pb-6">
-                      <table className="min-w-full divide-y divide-gray-200/50 w-full table-fixed">
-                        <thead className="bg-gradient-to-r from-gray-50/50 to-blue-50/50 sticky top-0 z-10 backdrop-blur-sm">
-                          <tr>
-                            {Object.keys(currentData[0] || {}).map((key) => (
-                              <th
-                                key={key}
-                                className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-0 flex-1 max-w-none"
-                              >
-                                {key
-                                  .replace(/_/g, " ")
-                                  .replace(/\b\w/g, (l) => l.toUpperCase())}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white/50 divide-y divide-gray-200/50 backdrop-blur-sm">
-                          {currentData
-                            .slice(currentPage * 10, (currentPage + 1) * 10)
-                            .map((row, idx) => (
-                              <tr
-                                key={idx}
-                                className={`group hover:bg-gray-50/50 transition-all duration-200 ${
-                                  idx % 2 === 0 ? "bg-gray-50/30" : ""
-                                }`}
-                              >
-                                {Object.entries(row).map(([key, val]) => {
-                                  let formattedVal = val;
-                                  if (val == null || val === "") {
-                                    formattedVal = "-";
-                                  } else if (val instanceof Date) {
-                                    formattedVal = safeFormatDate(val);
-                                  } else if (typeof val === "number") {
-                                    const opts = {
-                                      maximumFractionDigits:
-                                        key.toLowerCase().includes("lat") ||
-                                        key.toLowerCase().includes("lon")
-                                          ? 6
-                                          : key.toLowerCase().includes("count") ||
-                                            key.toLowerCase().includes("id")
-                                          ? 0
-                                          : 2,
-                                    };
-                                    formattedVal = val.toLocaleString(
-                                      "en-US",
-                                      opts
-                                    );
-                                    if (
-                                      key.toLowerCase().includes("dollar") ||
-                                      key.toLowerCase().includes("amount") ||
-                                      key.toLowerCase().includes("cost") ||
-                                      key.toLowerCase().includes("spend") ||
-                                      key.toLowerCase().includes("inr")
-                                    ) {
-                                      formattedVal = `₹${formattedVal}`;
-                                    }
-                                  } else if (typeof val === "string") {
-                                    if (!isNaN(Date.parse(val))) {
+                  <div className="flex-1 overflow-hidden flex">
+                    <div className="flex-1 overflow-auto px-6 py-4">
+                      <div className="min-w-full divide-y divide-gray-200/30">
+                        <table className="min-w-full divide-y divide-gray-200/30">
+                          <thead className="bg-gradient-to-r from-indigo-50/50 to-purple-50/50 sticky top-0 z-10 backdrop-blur-sm">
+                            <tr>
+                              {Object.keys(currentData[0] || {}).map((key) => (
+                                <th
+                                  key={key}
+                                  className="px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider"
+                                  style={{ minWidth: '120px' }}
+                                >
+                                  {key
+                                    .replace(/_/g, " ")
+                                    .replace(/\b\w/g, (l) => l.toUpperCase())}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white/50 divide-y divide-gray-200/30 backdrop-blur-sm">
+                            {currentData
+                              .slice(currentPage * 10, (currentPage + 1) * 10)
+                              .map((row, idx) => (
+                                <tr
+                                  key={idx}
+                                  className={`group hover:bg-indigo-50/50 transition-all duration-200 ${
+                                    idx % 2 === 0 ? "bg-white/30" : "bg-indigo-50/20"
+                                  }`}
+                                >
+                                  {Object.entries(row).map(([key, val]) => {
+                                    let formattedVal = val;
+                                    if (val == null || val === "") {
+                                      formattedVal = "-";
+                                    } else if (val instanceof Date) {
                                       formattedVal = safeFormatDate(val);
-                                    } else if (
-                                      key.toLowerCase().includes("percentage") ||
-                                      key.toLowerCase().includes("pct")
-                                    ) {
-                                      const num = parseFloat(val);
-                                      formattedVal = isNaN(num)
-                                        ? val
-                                        : `${num.toFixed(2)}%`;
-                                    } else {
-                                      formattedVal = val;
-                                    }
-                                  } else {
-                                    formattedVal = String(val);
-                                  }
-                                  return (
-                                    <td
-                                      key={key}
-                                      className="px-3 py-4 whitespace-normal break-words text-sm text-gray-900 font-medium min-w-0 flex-1 max-w-none group-hover:text-gray-800 transition-colors duration-200"
-                                      title={
-                                        typeof val === "string" && val.length > 50
+                                    } else if (typeof val === "number") {
+                                      // Enhanced formatting: Use formatNumber for consistency
+                                      const isCurrency = key.toLowerCase().includes("dollar") ||
+                                        key.toLowerCase().includes("amount") ||
+                                        key.toLowerCase().includes("cost") ||
+                                        key.toLowerCase().includes("spend") ||
+                                        key.toLowerCase().includes("inr") ||
+                                        key.toLowerCase().includes("revenue") ||
+                                        key.toLowerCase().includes("expense");
+                                      formattedVal = formatNumber(val, {
+                                        prefix: isCurrency ? "₹" : "",
+                                        decimals: key.toLowerCase().includes("lat") ||
+                                          key.toLowerCase().includes("lon") ? 6 :
+                                          key.toLowerCase().includes("count") ||
+                                          key.toLowerCase().includes("id") ? 0 : 2,
+                                        currency: isCurrency,
+                                      });
+                                    } else if (typeof val === "string") {
+                                      if (!isNaN(Date.parse(val))) {
+                                        formattedVal = safeFormatDate(val);
+                                      } else if (
+                                        key
+                                          .toLowerCase()
+                                          .includes("percentage") ||
+                                        key.toLowerCase().includes("pct")
+                                      ) {
+                                        const num = parseFloat(val);
+                                        formattedVal = isNaN(num)
                                           ? val
-                                          : undefined
+                                          : `${formatNumber(num, { decimals: 2 })}%`;
+                                      } else {
+                                        formattedVal = val;
                                       }
-                                    >
-                                      {formattedVal}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
+                                    } else {
+                                      formattedVal = String(val);
+                                    }
+                                    return (
+                                      <td
+                                        key={key}
+                                        className="px-4 py-3 whitespace-pre-wrap text-sm text-gray-900 font-medium group-hover:text-gray-800 transition-colors duration-200 max-w-xs"
+                                        title={
+                                          typeof val === "string" &&
+                                          val.length > 50
+                                            ? val
+                                            : undefined
+                                        }
+                                      >
+                                        {formattedVal}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
-                  <div className="border-t border-gray-200/50 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4 p-6 backdrop-blur-sm">
+                  <div className="border-t border-white/40 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 flex flex-col sm:flex-row justify-between items-center gap-4 p-6 backdrop-blur-sm">
                     <span className="text-sm text-gray-700 font-medium">
                       Showing{" "}
                       <span className="font-bold">
@@ -1669,7 +2167,7 @@ export default function Dashboard() {
                       <button
                         disabled={currentPage === 0}
                         onClick={() => setCurrentPage((p) => p - 1)}
-                        className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-gray-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
+                        className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-indigo-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-indigo-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
                       >
                         <ChevronLeftIcon className="h-4 w-4" />
                         Previous
@@ -1681,14 +2179,14 @@ export default function Dashboard() {
                       <button
                         disabled={(currentPage + 1) * 10 >= currentData.length}
                         onClick={() => setCurrentPage((p) => p + 1)}
-                        className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-gray-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
+                        className="group relative flex items-center gap-1 px-4 py-2 bg-white/90 border border-gray-300/60 text-gray-700 rounded-xl disabled:bg-gray-100/80 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-indigo-50/80 backdrop-blur-sm hover:shadow-md hover:shadow-indigo-100/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 active:scale-95"
                       >
                         Next
                         <ChevronRightIcon className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
-                  <div className="p-6 bg-gradient-to-r from-green-50/50 to-emerald-50/50 border-t border-gray-200/50">
+                  <div className="p-6 bg-gradient-to-r from-green-50/50 to-emerald-50/50 border-t border-white/40">
                     <button
                       onClick={() =>
                         downloadCSV(currentData, `${currentTitle}.csv`)
@@ -1701,7 +2199,7 @@ export default function Dashboard() {
                   </div>
                 </>
               ) : (
-                <div className="flex items-center justify-center h-48 text-gray-500 font-medium backdrop-blur-sm p-6">
+                <div className="flex items-center justify-center h-48 text-gray-500 font-medium backdrop-blur-sm p-6 bg-gradient-to-br from-indigo-50/50 to-purple-50/50">
                   <p className="text-lg">No data available for this chart.</p>
                 </div>
               )}
@@ -1709,6 +2207,26 @@ export default function Dashboard() {
           </div>
         </>
       )}
+      {/* New: Drill-Down Modal */}
+      <DrillDownModal
+        isOpen={showDrillModal}
+        onClose={() => {
+          setShowDrillModal(false);
+          setDrillData(null);
+          setDrillBreadcrumb([]);
+        }}
+        drillData={drillData}
+        onDrillFurther={handleFurtherDrill}
+        breadcrumb={drillBreadcrumb}
+        onBreadcrumbClick={handleBreadcrumbClick}
+        isDrilling={isDrilling}
+      />
+      {/* New: Summary Modal */}
+      <SummaryModal
+        isOpen={showSummaryModal}
+        onClose={handleCloseSummary}
+        summary={currentSummary}
+      />
       <RegenerateModal
         isOpen={showRegenModal}
         onClose={handleCloseRegenModal}
@@ -1739,6 +2257,32 @@ export default function Dashboard() {
             transform: translateX(100%);
           }
         }
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes pulse-subtle {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.8;
+          }
+        }
+        @keyframes bounce-subtle {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-2px);
+          }
+        }
         .animate-blob {
           animation: blob 7s infinite;
         }
@@ -1763,6 +2307,15 @@ export default function Dashboard() {
         }
         .animate-fade-in-scale {
           animation: fade-in-scale 0.3s ease-out;
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.6s ease-out;
+        }
+        .animate-pulse-subtle {
+          animation: pulse-subtle 2s infinite;
+        }
+        .animate-bounce-subtle {
+          animation: bounce-subtle 1s infinite;
         }
       `}</style>
       <ToastContainer

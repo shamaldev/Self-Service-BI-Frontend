@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   AreaChart,
   Area,
@@ -9,12 +9,14 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { motion } from "framer-motion";
+
 // Mock utils for demo
 const formatDate = (value) => {
   if (!value) return "";
   const date = new Date(value);
   return isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 };
+
 const formatNumber = (value, compact = false) => {
   if (value === null || value === undefined) return "";
   return new Intl.NumberFormat('en-US', {
@@ -22,10 +24,12 @@ const formatNumber = (value, compact = false) => {
     maximumFractionDigits: 2
   }).format(value);
 };
+
 const getResponsiveMargin = (type, width) => {
   if (width < 400) return { top: 10, right: 10, left: 0, bottom: 20 };
   return { top: 20, right: 30, left: 20, bottom: 40 };
 };
+
 const chartColors = {
   area: ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"],
 };
@@ -45,11 +49,13 @@ const AreaChartComponent = ({
       </div>
     );
   }
+
   const { width: containerWidth } = containerSize || { width: 400, height: 300 };
   const xKey = chartConfig?.x_axis_col_name || Object.keys(data[0])[0] || "x";
   const yKeys = Array.isArray(chartConfig?.y_axis_col_name)
     ? chartConfig.y_axis_col_name
     : [chartConfig?.y_axis_col_name || Object.keys(data[0]).find((k) => k !== xKey) || "y"];
+
   if (yKeys.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm">
@@ -57,48 +63,143 @@ const AreaChartComponent = ({
       </div>
     );
   }
+
   const xLabel = chartConfig?.x_axis_label || xKey;
   const yLabel = chartConfig?.y_axis_label || yKeys.join(", ");
   const margin = getResponsiveMargin("areachart", containerWidth);
+
   const [visibleKeys, setVisibleKeys] = useState(
     Object.fromEntries(yKeys.map((y) => [y, true]))
   );
+  
+  // ✅ ADDED: Default filter to 'ytd'
+  const [selectedFilter, setSelectedFilter] = useState('ytd');
+
+  // ✅ ADDED: Log the current applied filter whenever it changes
+  useEffect(() => {
+    console.log(`Current applied filter: ${selectedFilter}`);
+  }, [selectedFilter]);
+
   const toggleSeries = (key) =>
     setVisibleKeys((prev) => ({ ...prev, [key]: !prev[key] }));
-  const transformedData = data
-    .map((item) => {
-      const point = { [xKey]: item[xKey] };
-      yKeys.forEach((yKey) => {
-        const rawValue = (item[yKey] || '').toString().replace(/[^\d.-]/g, '');
-        point[yKey] = parseFloat(rawValue) || 0;
+
+  // ✅ ADDED: Compute date range based on filter
+  const now = useMemo(() => new Date(), []);
+  const startDate = useMemo(() => {
+    if (selectedFilter === '30d') {
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else if (selectedFilter === '90d') {
+      return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    } else if (selectedFilter === 'ytd') {
+      return new Date(now.getFullYear(), 0, 1);
+    }
+    return now;
+  }, [selectedFilter, now]);
+
+  // ✅ MODIFIED: Memoized transformation and filtering for performance
+  const processedData = useMemo(() => {
+    const transformed = data
+      .map((item) => {
+        const point = { [xKey]: item[xKey] };
+        yKeys.forEach((yKey) => {
+          const rawValue = (item[yKey] || '').toString().replace(/[^\d.-]/g, '');
+          point[yKey] = parseFloat(rawValue) || 0;
+        });
+        return point;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a[xKey]);
+        const dateB = new Date(b[xKey]);
+        return isNaN(dateA.getTime()) ?
+          (a[xKey] < b[xKey] ? -1 : 1) :
+          dateA - dateB;
       });
-      return point;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a[xKey]);
-      const dateB = new Date(b[xKey]);
-      return isNaN(dateA.getTime()) ?
-        (a[xKey] < b[xKey] ? -1 : 1) :
-        dateA - dateB;
+    
+    // Filter by date range
+    return transformed.filter((item) => {
+      const itemDate = new Date(item[xKey]);
+      return itemDate >= startDate && itemDate <= now;
     });
+  }, [data, xKey, yKeys, startDate, now]);
+
+  // ✅ ADDED: Time Filter Buttons
+  const TimeFilters = () => (
+    <div 
+      className="time-filter-buttons flex justify-center mb-4 gap-1 pointer-events-auto"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {[
+        { key: '30d', label: '30 Days' },
+        { key: '90d', label: '90 Days' },
+        { key: 'ytd', label: 'YTD' }
+      ].map(({ key, label }) => {
+        const isSelected = selectedFilter === key;
+        return (
+          <motion.button
+            key={key}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setSelectedFilter(key);
+              console.log(`Filter changed to: ${key}`);
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 cursor-pointer ${
+              isSelected
+                ? 'bg-purple-500 text-white shadow-md'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300 hover:text-gray-800 shadow-sm'
+            }`}
+            aria-label={`Select ${label} filter ${isSelected ? '(selected)' : ''}`}
+            title={`Filter to ${label.toLowerCase()}`}
+            style={{ pointerEvents: 'auto', touchAction: 'none' }}
+          >
+            {label}
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+
   const CustomLegend = () => (
-    <div className="flex flex-wrap justify-center gap-3 mt-4">
+    <div 
+      className="flex flex-wrap justify-center gap-3 mt-4 pointer-events-auto"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {yKeys.map((yKey, i) => {
         const color = chartColors.area[i % chartColors.area.length];
         const active = visibleKeys[yKey];
         return (
           <motion.button
             key={yKey}
-            onClick={() => toggleSeries(yKey)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleSeries(yKey);
+              console.log(`Toggled series: ${yKey} to ${!active}`);
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`group relative flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-              ${
-                active
-                  ? "bg-white text-gray-900 border border-gray-200 shadow-md hover:shadow-lg hover:bg-gray-50"
-                  : "bg-gray-100 text-gray-500 border border-gray-200 shadow-sm hover:bg-gray-200 hover:text-gray-600 line-through opacity-70"
-              }`}
-            style={{ borderLeft: `4px solid ${active ? color : `${color}80`}` }}
+            className={`legend-button group relative flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer ${
+              active
+                ? "bg-white text-gray-900 border border-gray-200 shadow-md hover:shadow-lg hover:bg-gray-50"
+                : "bg-gray-100 text-gray-500 border border-gray-200 shadow-sm hover:bg-gray-200 hover:text-gray-600 line-through opacity-70"
+            }`}
+            style={{ 
+              borderLeft: `4px solid ${active ? color : `${color}80`}`,
+              pointerEvents: 'auto',
+              touchAction: 'none'
+            }}
             aria-label={`Toggle visibility of ${yKey} series ${active ? '(visible)' : '(hidden)'}`}
             title={`Click to ${active ? 'hide' : 'show'} ${yKey} series`}
           >
@@ -117,16 +218,27 @@ const AreaChartComponent = ({
       })}
     </div>
   );
+
   return (
     <motion.div
-      className="flex flex-col h-full w-full p-2"
+      className="flex flex-col h-full w-full p-2 pointer-events-auto"
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
     >
-      <div className="flex-1 w-full min-h-0">
+      {/* ✅ ADDED: Time Filter Buttons */}
+      <TimeFilters />
+      
+      {/* ✅ MODIFIED: Added key prop for smooth transitions on filter change */}
+      <motion.div
+        key={selectedFilter}
+        initial={{ opacity: 0.7, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeInOut" }}
+        className="flex-1 w-full min-h-0 pointer-events-auto"
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={transformedData} margin={margin}>
+          <AreaChart data={processedData} margin={margin}>
             <defs>
               {yKeys.map((yKey, i) => (
                 <linearGradient
@@ -214,13 +326,16 @@ const AreaChartComponent = ({
                   fillOpacity={1}
                   dot={{ r: 4, fill: color, stroke: "#fff", strokeWidth: 2 }}
                   activeDot={{ r: 6 }}
-                  animationDuration={800}
+                  // ✅ ADDED: Extended animation for smoother filter transitions
+                  animationDuration={1000}
+                  isAnimationActive={true}
                 />
               );
             })}
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </motion.div>
+      
       <CustomLegend />
     </motion.div>
   );
