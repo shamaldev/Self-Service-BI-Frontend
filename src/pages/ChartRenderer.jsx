@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import React, { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { SparklesIcon } from "@heroicons/react/24/outline";
 import { getChartConfig } from "../utils/chartConfig";
 import BubbleMapChart from "../components/charts/BubbleMapChart";
@@ -13,7 +13,7 @@ import ParetoChart from "../components/charts/ParetoChart";
 import LineChartComponent from "../components/charts/LineChartComponent";
 import AreaChartComponent from "../components/charts/AreaChartComponent";
 // ChartRenderer dynamically renders the appropriate chart component based on KPI type and data
-function ChartRenderer({ kpi, data, chartConfig }) {
+function ChartRenderer({ kpi, data, chartConfig, onDrillDown, drillableColumns, drillState }) {
   // Ref for chart container DOM node
   const containerRef = useRef(null);
   // Ref for debouncing resize events
@@ -38,12 +38,12 @@ function ChartRenderer({ kpi, data, chartConfig }) {
       const prev = prevSizeRef.current;
       const deltaWidth = Math.abs(newSize.width - prev.width);
       const deltaHeight = Math.abs(newSize.height - prev.height);
-      const TOLERANCE = 4;
+      const TOLERANCE = 8; // ✅ PERF: Increased tolerance to reduce spurious updates during rapid resizes
       if (deltaWidth >= TOLERANCE || deltaHeight >= TOLERANCE) {
         setContainerSize(newSize);
         prevSizeRef.current = newSize;
       }
-    }, 300);
+    }, 500); // ✅ PERF: Increased debounce to 500ms to batch rapid resize events (e.g., during drag)
   }, []);
   // Observe container and window resize to update chart size responsively
   useEffect(() => {
@@ -80,12 +80,14 @@ function ChartRenderer({ kpi, data, chartConfig }) {
   // Normalize chart type and get chart config
   const type = kpi.chart_type.replace(/_/g, "");
   const config = getChartConfig(type.replace(/chart$/, ""), chartConfig, data);
-  // Responsive font and label sizes
+  // Responsive font and label sizes (memoized)
   const { width: containerWidth, height: containerHeight } = containerSize;
-  const fontSize = containerWidth < 400 ? 9 : containerWidth < 600 ? 10 : 11;
-  const labelFontSize =
-    containerWidth < 400 ? 10 : containerWidth < 600 ? 11 : 12;
-  const showLabels = containerWidth > 400;
+  const responsiveProps = useMemo(() => ({
+    fontSize: containerWidth < 400 ? 9 : containerWidth < 600 ? 10 : 11,
+    labelFontSize: containerWidth < 400 ? 10 : containerWidth < 600 ? 11 : 12,
+    showLabels: containerWidth > 400,
+  }), [containerWidth]);
+  const { fontSize, labelFontSize, showLabels } = responsiveProps;
   const showLegend = false;
   // Render the appropriate chart component based on type
   try {
@@ -94,7 +96,7 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <LineChartComponent
               data={data}
@@ -103,6 +105,9 @@ function ChartRenderer({ kpi, data, chartConfig }) {
               fontSize={fontSize}
               labelFontSize={labelFontSize}
               showLabels={showLabels}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -110,7 +115,7 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <AreaChartComponent
               data={data}
@@ -119,6 +124,9 @@ function ChartRenderer({ kpi, data, chartConfig }) {
               fontSize={fontSize}
               labelFontSize={labelFontSize}
               showLabels={showLabels}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -127,7 +135,7 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <VerticalBarChart
               data={data}
@@ -136,6 +144,9 @@ function ChartRenderer({ kpi, data, chartConfig }) {
               fontSize={fontSize}
               labelFontSize={labelFontSize}
               showLabels={showLabels}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -143,13 +154,16 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <HorizontalBarChart
               data={data}
               chartConfig={chartConfig}
               containerSize={containerSize}
               fontSize={fontSize}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -157,7 +171,7 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <StackedBarChart
               data={data}
@@ -166,6 +180,9 @@ function ChartRenderer({ kpi, data, chartConfig }) {
               fontSize={fontSize}
               labelFontSize={labelFontSize}
               showLabels={showLabels}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -173,7 +190,7 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <ClusteredBarChart
               data={data}
@@ -182,6 +199,9 @@ function ChartRenderer({ kpi, data, chartConfig }) {
               fontSize={fontSize}
               labelFontSize={labelFontSize}
               showLabels={showLabels}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -189,7 +209,7 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <PieChartComponent
               data={data}
@@ -198,6 +218,9 @@ function ChartRenderer({ kpi, data, chartConfig }) {
               fontSize={fontSize}
               labelFontSize={labelFontSize}
               showLabels={showLabels}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -205,13 +228,16 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <FunnelChart
               data={data}
               chartConfig={chartConfig}
               containerSize={containerSize}
               fontSize={fontSize}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -219,7 +245,7 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <ParetoChart
               data={data}
@@ -228,6 +254,9 @@ function ChartRenderer({ kpi, data, chartConfig }) {
               fontSize={fontSize}
               labelFontSize={labelFontSize}
               showLabels={showLabels}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );
@@ -235,13 +264,16 @@ function ChartRenderer({ kpi, data, chartConfig }) {
         return (
           <div
             ref={containerRef}
-            className="flex-1 w-full h-full min-h-0 min-w-0"
+            className="flex-1 w-full h-full min-h-0 min-w-0 relative z-10"
           >
             <BubbleMapChart
               data={data}
               chartConfig={chartConfig}
               containerSize={containerSize}
               fontSize={fontSize}
+              onDrillDown={onDrillDown}
+              drillableColumns={drillableColumns}
+              drillState={drillState}
             />
           </div>
         );

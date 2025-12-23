@@ -8,8 +8,12 @@ import {
   CheckCircleIcon,
   LightBulbIcon,
   ExclamationTriangleIcon,
+  MicrophoneIcon,
+  SpeakerWaveIcon,
+  StopCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart,
   Bar,
@@ -33,6 +37,7 @@ import { API_BASE_URL } from "../config/axios";
 import Cookies from "js-cookie";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import { jwtDecode } from "jwt-decode";
 
 const COLORS = [
   "#A5B4FC", "#C4B5FD", "#FBB6CE", "#6EE7B7", "#FDE68A",
@@ -46,7 +51,6 @@ function prettyLabel(k = "") {
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
 function formatTooltipValue(v) {
   if (v === null || v === undefined) return "-";
   if (typeof v === "number") {
@@ -55,7 +59,6 @@ function formatTooltipValue(v) {
   }
   return String(v);
 }
-
 function renderAnswer(text) {
   if (!text) return null;
   const lines = text.split('\n').filter(l => l.trim());
@@ -73,7 +76,6 @@ function renderAnswer(text) {
   }
   return <p className="text-slate-700 leading-relaxed">{text}</p>;
 }
-
 function inferConfig(chart) {
   const data = chart.data || [];
   const cfg = chart.chart_config || {};
@@ -115,11 +117,12 @@ function inferConfig(chart) {
     (yKeys && yKeys.length === 1
       ? prettyLabel(yKeys[0])
       : prettyLabel(yKeys?.join(", ")));
+  // Updated: Skip series inference if already pivoted
   const seriesKey =
-    cfg.series || cfg.cluster_by || cfg.stack_by || cfg.color_by || null;
+    cfg._inferred_y_keys ? null :
+    (cfg.series || cfg.cluster_by || cfg.stack_by || cfg.color_by || null);
   return { xKey, yKeys, xAxisLabel, yAxisLabel, seriesKey, config: cfg };
 }
-
 function pivotLongToWide(data, xKey, seriesKey, valueKey) {
   const uniqueX = [...new Set(data.map((d) => d[xKey]))];
   const uniqueSeries = [...new Set(data.map((d) => d[seriesKey]))];
@@ -138,9 +141,12 @@ function pivotLongToWide(data, xKey, seriesKey, valueKey) {
     return row;
   });
 }
-
-// ----------------- Chart Renderer -----------------
-function renderChart(chart, height = 420) {
+// ----------------- Chart Renderer (Enhanced with better animations) -----------------
+function renderChart(chart, height = 420, depth = 0) {
+  if (depth > 5) {
+    console.warn('Max recursion depth reached in renderChart; skipping pivot.');
+    return <div className="text-red-400 italic p-4">Chart rendering error: Complex data structure.</div>;
+  }
   let data = Array.isArray(chart.data) ? chart.data.slice() : [];
   let chartType =
     chart.chart_type ||
@@ -160,22 +166,30 @@ function renderChart(chart, height = 420) {
       (k) => typeof (data[0] || {})[k] === "number"
     );
   if (seriesKey && probableValueKey && data[0] && seriesKey in data[0]) {
-    data = pivotLongToWide(data, xKey, seriesKey, probableValueKey);
-    const generatedSeries = [...new Set(chart.data.map((d) => d[seriesKey]))];
-    const generatedYKeys = generatedSeries.map(
-      (s) => `${probableValueKey}_${s}`
-    );
-    return renderChart(
-      {
-        ...chart,
-        data,
-        chart_config: {
-          ...chart.chart_config,
-          _inferred_y_keys: generatedYKeys,
+    // Guard: Skip if seriesKey === xKey (invalid config; prevents loop)
+    if (seriesKey === xKey) {
+      console.warn(`Skipping pivot: seriesKey (${seriesKey}) matches xKey (${xKey}). Check chart_config.`);
+      // Fall through to normal rendering with original yKeys
+    } else {
+      data = pivotLongToWide(data, xKey, seriesKey, probableValueKey);
+      const generatedSeries = [...new Set(chart.data.map((d) => d[seriesKey]))];
+      const generatedYKeys = generatedSeries.map(
+        (s) => `${probableValueKey}_${s}`
+      );
+      // Recursive call with depth +1
+      return renderChart(
+        {
+          ...chart,
+          data,
+          chart_config: {
+            ...chart.chart_config,
+            _inferred_y_keys: generatedYKeys,
+          },
         },
-      },
-      height
-    );
+        height,
+        depth + 1
+      );
+    }
   }
   const finalYKeysRaw =
     (chart.chart_config && chart.chart_config._inferred_y_keys) || yKeys;
@@ -464,12 +478,16 @@ function renderChart(chart, height = 420) {
     </div>
   );
 }
-
-// ----------------- Data Quality Alert -----------------
+// ----------------- Data Quality Alert (Enhanced with better motion) -----------------
 function DataQualityAlert({ alert }) {
   if (!alert) return null;
   return (
-    <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-red-50 border-l-4 border-amber-500 rounded-xl p-5 shadow-lg animate-in fade-in-50 duration-300">
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.5 }}
+      className="bg-gradient-to-r from-amber-50 via-orange-50 to-red-50 border-l-4 border-amber-500 rounded-xl p-5 shadow-lg"
+    >
       <div className="flex items-start gap-3">
         <ExclamationTriangleIcon className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
@@ -488,16 +506,21 @@ function DataQualityAlert({ alert }) {
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
-
-// ----------------- Executive Summary -----------------
+// ----------------- Executive Summary (Enhanced gradient) -----------------
 function ExecutiveSummary({ summary }) {
   if (!summary) return null;
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 rounded-2xl shadow-2xl border border-indigo-500/20 animate-in slide-in-from-bottom-2 duration-500">
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-300/10 to-purple-300/10absolute inset-0 bg-gradient-to-br from-white to-indigo-50" />
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 rounded-2xl shadow-2xl border border-indigo-500/20"
+      whileHover={{ scale: 1.02 }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-300/10 to-purple-300/10" />
       <div className="relative p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-lg flex items-center justify-center shadow-lg">
@@ -509,15 +532,19 @@ function ExecutiveSummary({ summary }) {
           {renderAnswer(summary)}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
-
-// ----------------- Simple Answer -----------------
+// ----------------- Simple Answer (Added subtle hover) -----------------
 function SimpleAnswer({ answer }) {
   if (!answer) return null;
   return (
-    <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5 animate-in fade-in-50 duration-300">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+      className="bg-white rounded-xl shadow-md border border-slate-200 p-5"
+    >
       <div className="flex items-start gap-3">
         <LightBulbIcon className="h-6 w-6 text-indigo-600 flex-shrink-0 mt-0.5" />
         <div>
@@ -525,149 +552,184 @@ function SimpleAnswer({ answer }) {
           {renderAnswer(answer)}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
-
-// ----------------- Key Insights -----------------
+// ----------------- Key Insights (Grid with stagger animation) -----------------
 function KeyInsights({ insights }) {
   if (!insights?.length) return null;
   return (
-    <div className="space-y-4 animate-in fade-in-100 duration-300">
-      <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+    <div className="space-y-4">
+      <motion.h4 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-lg font-bold text-slate-800 flex items-center gap-2"
+      >
         <ChartBarIcon className="h-6 w-6 text-indigo-600" />
         Key Insights
-      </h4>
+      </motion.h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {insights.map((insight, idx) => (
-          <div
-            key={idx}
-            className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-300 group"
-          >
-            <div className="bg-gradient-to-r from-indigo-500 to-purple-500 p-4 group-hover:from-indigo-600 group-hover:to-purple-600 transition-colors">
-              <h5 className="font-bold text-white text-base">
-                {insight.headline}
-              </h5>
-              {insight.quantitative_summary && (
-                <div className="mt-2 flex items-center gap-4 text-white/90 text-sm">
-                  <span className="font-semibold">
-                    {insight.quantitative_summary.primary_metric}
-                  </span>
-                  <span className="text-white/70">
-                    {insight.quantitative_summary.time_period}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="p-4">
-              <p className="text-slate-700 mb-3 leading-relaxed">
-                {insight.business_impact}
-              </p>
-              {insight.supporting_evidence?.length > 0 && (
-                <div className="space-y-2">
-                  {insight.supporting_evidence.map((evidence, eidx) => (
-                    <div
-                      key={eidx}
-                      className="bg-slate-50 rounded-lg p-3 border border-slate-200"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                          {evidence.metric}
-                        </span>
-                        {evidence.confidence && (
-                          <span className="text-xs text-slate-500">
-                            Confidence: {evidence.confidence}%
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-2xl font-bold text-indigo-600 mb-1">
-                        {evidence.value}
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        {evidence.context}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {insight.confidence_score && (
-                <div className="mt-3 pt-3 border-t border-slate-200">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 font-medium">Confidence Score</span>
-                    <span className="font-bold text-indigo-600">
-                      {insight.confidence_score}%
+        <AnimatePresence>
+          {insights.map((insight, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ delay: idx * 0.1 }}
+              whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+              className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden group"
+            >
+              <div className="bg-gradient-to-r from-indigo-500 to-purple-500 p-4 group-hover:from-indigo-600 group-hover:to-purple-600 transition-colors duration-300">
+                <h5 className="font-bold text-white text-base">
+                  {insight.headline}
+                </h5>
+                {insight.quantitative_summary && (
+                  <div className="mt-2 flex items-center gap-4 text-white/90 text-sm">
+                    <span className="font-semibold">
+                      {insight.quantitative_summary.primary_metric}
+                    </span>
+                    <span className="text-white/70">
+                      {insight.quantitative_summary.time_period}
                     </span>
                   </div>
-                  <div className="mt-1 w-full bg-slate-200 rounded-full h-2">
-                    <div
-                      className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${insight.confidence_score}%` }}
-                    />
+                )}
+              </div>
+              <div className="p-4">
+                <p className="text-slate-700 mb-3 leading-relaxed">
+                  {insight.business_impact}
+                </p>
+                {insight.supporting_evidence?.length > 0 && (
+                  <div className="space-y-2">
+                    {insight.supporting_evidence.map((evidence, eidx) => (
+                      <div
+                        key={eidx}
+                        className="bg-slate-50 rounded-lg p-3 border border-slate-200"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            {evidence.metric}
+                          </span>
+                          {evidence.confidence && (
+                            <span className="text-xs text-slate-500">
+                              Confidence: {evidence.confidence}%
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-2xl font-bold text-indigo-600 mb-1">
+                          {evidence.value}
+                        </div>
+                        <div className="text-xs text-slate-600">
+                          {evidence.context}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+                )}
+                {insight.confidence_score && (
+                  <div className="mt-3 pt-3 border-t border-slate-200">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">Confidence Score</span>
+                      <span className="font-bold text-indigo-600">
+                        {insight.confidence_score}%
+                      </span>
+                    </div>
+                    <div className="mt-1 w-full bg-slate-200 rounded-full h-2">
+                      <motion.div
+                        className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${insight.confidence_score}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );
 }
-
-// ----------------- Charts Grid -----------------
+// ----------------- Charts Grid (Staggered entrance) -----------------
 function ChartsGrid({ charts }) {
   if (!charts?.length) return null;
   return (
-    <div className="space-y-4 animate-in fade-in-100 duration-300">
-      <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+    <div className="space-y-4">
+      <motion.h4 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-lg font-bold text-slate-800 flex items-center gap-2"
+      >
         <ChartBarIcon className="h-6 w-6 text-indigo-600" />
         Data Visualizations
-      </h4>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {charts.map((c, idx) => (
-          <div
-            key={idx}
-            className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-300 group"
-          >
-            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-200">
-              <h5 className="text-sm font-semibold text-slate-800">
-                {c.title || c.chart_config?.title || `Analysis ${idx + 1}`}
-              </h5>
-              {c.purpose && (
-                <span className="text-xs text-slate-500 capitalize">
-                  {c.purpose} Analysis
-                </span>
-              )}
-            </div>
-            <div className="p-4">
-              <div className="w-full h-[380px]">{renderChart(c, 380)}</div>
-            </div>
-            {c.row_count && (
-              <div className="px-4 pb-3 text-xs text-slate-500">
-                Based on {c.row_count.toLocaleString()} data points
+      </motion.h4>
+      <div className="grid grid-cols-1 gap-5">
+        <AnimatePresence>
+          {charts.map((c, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -30 }}
+              transition={{ delay: idx * 0.15 }}
+              whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+              className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden group"
+            >
+              <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-200">
+                <h5 className="text-sm font-semibold text-slate-800">
+                  {c.title || c.chart_config?.title || `Analysis ${idx + 1}`}
+                </h5>
+                {c.purpose && (
+                  <span className="text-xs text-slate-500 capitalize">
+                    {c.purpose} Analysis
+                  </span>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+              <div className="p-4">
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="w-full h-[380px]"
+                >
+                  {renderChart(c, 380)}
+                </motion.div>
+              </div>
+              {c.row_count && (
+                <div className="px-4 pb-3 text-xs text-slate-500">
+                  Based on {c.row_count.toLocaleString()} data points
+                </div>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );
 }
-
-// ----------------- Strategic Recommendations -----------------
+// ----------------- Strategic Recommendations (Enhanced interactions) -----------------
 function StrategicRecommendations({ recommendations }) {
   if (!recommendations?.length) return null;
   return (
-    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl shadow-md border border-emerald-200 p-5 animate-in slide-in-from-bottom-2 duration-500">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl shadow-md border border-emerald-200 p-5"
+    >
       <h4 className="font-bold text-emerald-800 text-base mb-4 flex items-center gap-2">
         <CheckCircleIcon className="h-6 w-6" />
         Strategic Recommendations
       </h4>
       <div className="space-y-3">
         {recommendations.map((rec, i) => (
-          <div
+          <motion.div
             key={i}
-            className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-200"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.1 }}
+            whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+            className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm group"
           >
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-6 h-6 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
@@ -698,78 +760,103 @@ function StrategicRecommendations({ recommendations }) {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
-    </div>
+    </motion.div>
   );
 }
-
-// ----------------- Root Cause Analysis -----------------
+// ----------------- Root Cause Analysis (Subtle animation) -----------------
 function RootCauseAnalysis({ analysis }) {
   if (!analysis) return null;
   return (
-    <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl shadow-md border border-purple-200 p-5 animate-in fade-in-100 duration-300">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl shadow-md border border-purple-200 p-5"
+    >
       <h4 className="font-bold text-purple-800 text-base mb-3">
         Root Cause Analysis
       </h4>
       <div className="space-y-3">
-        <div className="bg-white rounded-lg p-4 border-l-4 border-purple-500">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-white rounded-lg p-4 border-l-4 border-purple-500"
+        >
           <h5 className="text-sm font-semibold text-slate-800 mb-1">
             Primary Driver
           </h5>
           <p className="text-slate-700">
             {analysis.primary_driver}
           </p>
-        </div>
+        </motion.div>
         {analysis.secondary_factors?.length > 0 && (
-          <div className="bg-white rounded-lg p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white rounded-lg p-4"
+          >
             <h5 className="text-sm font-semibold text-slate-800 mb-2">
               Contributing Factors
             </h5>
             <ul className="space-y-1 text-sm text-slate-700">
               {analysis.secondary_factors.map((factor, i) => (
-                <li key={i} className="flex items-start gap-2">
+                <motion.li 
+                  key={i} 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="flex items-start gap-2"
+                >
                   <span className="text-purple-500 mt-1">•</span>
                   <span>{factor}</span>
-                </li>
+                </motion.li>
               ))}
             </ul>
-          </div>
+          </motion.div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
-
-// ----------------- Next Steps -----------------
+// ----------------- Next Steps (Enhanced clickable states) -----------------
 function NextSteps({ actions = [], onFollowUpClick }) {
   const allActions = [...actions];
   if (!allActions.length) return null;
   return (
-    <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5 animate-in slide-in-from-bottom-2 duration-300">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl shadow-md border border-slate-200 p-5"
+    >
       <h4 className="font-semibold text-slate-800 text-base mb-3 flex items-center gap-2">
         <LightBulbIcon className="h-5 w-5 text-indigo-600" />
         Next Steps
       </h4>
       <div className="space-y-2">
         {allActions.map((action, i) => (
-          <div
+          <motion.div
             key={i}
-            className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg hover:bg-indigo-50 transition-all duration-200 cursor-pointer border border-transparent hover:border-indigo-200 hover:scale-[1.02]"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.1 }}
+            whileHover={{ scale: 1.02, backgroundColor: "#f8fafc" }}
+            whileTap={{ scale: 0.98 }}
+            className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg cursor-pointer border border-transparent hover:border-indigo-200 transition-all duration-200"
             onClick={() => onFollowUpClick(action?.action || action)}
           >
             <div className="flex-shrink-0 w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
               {i + 1}
             </div>
             <p className="text-sm text-slate-700 flex-1">{action?.action || action}</p>
-          </div>
+          </motion.div>
         ))}
       </div>
-    </div>
+    </motion.div>
   );
 }
-
 // ----------------- ResultDisplay (Refactored) -----------------
 function ResultDisplay({ result, onFollowUpClick }) {
   if (!result) return null;
@@ -787,131 +874,373 @@ function ResultDisplay({ result, onFollowUpClick }) {
     </div>
   );
 }
-
-// ----------------- Typing Indicator -----------------
+// ----------------- MiniGame: Word Scramble (Modernized with motion) -----------------
+function BusinessWordScramble({ onAnswer }) {
+  const terms = [
+    { scrambled: "OR I", original: "ROI", hint: "Return on Investment" },
+    { scrambled: "ABDTIE", original: "DEBT", hint: "A financial obligation" },
+    { scrambled: "SWOT", original: "SWOT", hint: "Analysis framework" },
+    { scrambled: "KPI", original: "KPI", hint: "Key Performance Indicator" },
+    { scrambled: "CEO", original: "CEO", hint: "Chief Executive Officer" },
+    { scrambled: "CF O", original: "CFO", hint: "Chief Financial Officer" },
+    { scrambled: "IPO", original: "IPO", hint: "Initial Public Offering" },
+    { scrambled: "GREMER", original: "MERGER", hint: "Business combination" }
+  ];
+  const [currentTerm, setCurrentTerm] = useState(() => terms[Math.floor(Math.random() * terms.length)]);
+  const [userGuess, setUserGuess] = useState("");
+  const [revealed, setRevealed] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const handleGuess = () => {
+    if (revealed || !userGuess.trim()) return;
+    const normalizedGuess = userGuess.trim().toUpperCase().replace(/\s/g, '');
+    const normalizedOriginal = currentTerm.original.toUpperCase().replace(/\s/g, '');
+    if (normalizedGuess === normalizedOriginal) {
+      setFeedback(`✅ Correct! It's ${currentTerm.original}. ${currentTerm.hint}`);
+      onAnswer(true);
+    } else {
+      setFeedback(`❌ Nope! It's ${currentTerm.original}. ${currentTerm.hint}`);
+      onAnswer(false);
+    }
+    setRevealed(true);
+    // Auto-next after 3 seconds
+    setTimeout(() => {
+      setCurrentTerm(terms[Math.floor(Math.random() * terms.length)]);
+      setUserGuess("");
+      setRevealed(false);
+      setFeedback("");
+    }, 3000);
+  };
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-indigo-200 shadow-md max-w-md"
+    >
+      <h5 className="font-semibold text-indigo-700 mb-3 text-center">🔤 Business Word Scramble!</h5>
+      <motion.div 
+        animate={{ scale: revealed ? [1, 1.05, 1] : 1 }}
+        transition={{ duration: 0.3 }}
+        className="text-3xl font-bold text-center mb-4 text-indigo-600"
+      >
+        {currentTerm.scrambled}
+      </motion.div>
+      <p className="text-sm text-slate-600 text-center mb-3 italic">Unscramble to form a business term:</p>
+      <input
+        type="text"
+        value={userGuess}
+        onChange={(e) => setUserGuess(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleGuess()}
+        placeholder="Your guess..."
+        disabled={revealed}
+        className="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 mb-2 text-center uppercase"
+      />
+      <motion.button
+        onClick={handleGuess}
+        disabled={revealed || !userGuess.trim()}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        animate={{ scale: revealed ? 1 : 1 }}
+        className={`w-full py-2 rounded-lg text-sm font-medium transition-all ${
+          revealed || !userGuess.trim()
+            ? 'bg-slate-300 cursor-not-allowed'
+            : 'bg-indigo-500 hover:bg-indigo-600 text-white'
+        }`}
+      >
+        {revealed ? "Next!" : "Unscramble!"}
+      </motion.button>
+      {feedback && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-3 text-xs text-slate-700 bg-slate-50 p-2 rounded-lg text-center"
+        >
+          {feedback}
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}
+// ----------------- Typing Indicator with MiniGame (Smooth progress) -----------------
 function TypingIndicator({ progress }) {
   if (!progress) return null;
+  const [score, setScore] = useState(0);
+  const handleScrambleAnswer = (isCorrect) => {
+    if (isCorrect) setScore(prev => prev + 1);
+  };
   return (
-    <div className="flex items-center gap-2 mb-2 animate-pulse">
+    <div className="flex flex-col items-center gap-4 mb-4 animate-pulse">
       <div className="flex space-x-1">
-        <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-        <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-        <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-      </div>
-      <span className="text-xs font-medium text-gray-600">
-        {progress.message}
-      </span>
-      <div className="flex-1 bg-gray-200 rounded-full h-1 ml-4 overflow-hidden">
-        <div
-          className="bg-gradient-to-r from-indigo-500 to-purple-500 h-1 rounded-full transition-all duration-300"
-          style={{ width: `${progress.progress || 0}%` }}
+        <motion.div 
+          className="w-3 h-3 bg-indigo-500 rounded-full" 
+          animate={{ y: [-5, 5, -5] }}
+          transition={{ duration: 1, repeat: Infinity }}
+          style={{ animationDelay: '0ms' }}
+        />
+        <motion.div 
+          className="w-3 h-3 bg-indigo-500 rounded-full" 
+          animate={{ y: [-5, 5, -5] }}
+          transition={{ duration: 1, repeat: Infinity, delay: 0.15 }}
+          style={{ animationDelay: '150ms' }}
+        />
+        <motion.div 
+          className="w-3 h-3 bg-indigo-500 rounded-full" 
+          animate={{ y: [-5, 5, -5] }}
+          transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
+          style={{ animationDelay: '300ms' }}
         />
       </div>
+      <span className="text-xs font-medium text-gray-600 text-center">
+        {progress.message} (Scramble Score: {score})
+      </span>
+      <div className="flex-1 bg-gray-200 rounded-full h-1 w-32 overflow-hidden">
+        <motion.div
+          className="bg-gradient-to-r from-indigo-500 to-purple-500 h-1 rounded-full"
+          initial={{ width: 0 }}
+          animate={{ width: `${progress.progress || 0}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        />
+      </div>
+      <BusinessWordScramble onAnswer={handleScrambleAnswer} />
     </div>
   );
 }
-
-// ----------------- Message (Improved) -----------------
-function Message({ from, text, timestamp, isTyping = false, progress = null, result = null, onFollowUpClick }) {
+// ----------------- getResponseText -----------------
+function getResponseText(result) {
+  if (!result) return '';
+  let text = '';
+  if (result.executive_summary) {
+    text += result.executive_summary.replace(/\[.*?\]\(.*?\)/g, '').replace(/[*_~`]/g, '') + '. ';
+  }
+  if (result.answer) {
+    text += result.answer.replace(/\[.*?\]\(.*?\)/g, '').replace(/[*_~`]/g, '') + '. ';
+  }
+  if (result.key_insights && result.key_insights.length > 0) {
+    result.key_insights.forEach(insight => {
+      text += insight.headline ? insight.headline + '. ' : '';
+      text += insight.business_impact ? insight.business_impact + '. ' : '';
+    });
+  }
+  if (result.strategic_recommendations && result.strategic_recommendations.length > 0) {
+    result.strategic_recommendations.forEach(rec => {
+      text += rec.action ? rec.action + '. ' : '';
+      text += rec.rationale ? rec.rationale + '. ' : '';
+    });
+  }
+  if (result.root_cause_analysis) {
+    text += result.root_cause_analysis.primary_driver ? result.root_cause_analysis.primary_driver + '. ' : '';
+    if (result.root_cause_analysis.secondary_factors) {
+      result.root_cause_analysis.secondary_factors.forEach(factor => {
+        text += factor + '. ';
+      });
+    }
+  }
+  return text.trim();
+}
+// ----------------- Message (Enhanced with AnimatePresence for smooth entry) -----------------
+function Message({ from, text, timestamp, isTyping = false, progress = null, result = null, onFollowUpClick, onReadAloud, isSpeaking }) {
   const isAI = from === "ai";
+  const responseText = isAI && result ? getResponseText(result) : '';
+  const hasTextToRead = responseText.length > 0;
   return (
-    <div
-      className={`flex items-start gap-4 mb-8 last:mb-0 animate-in slide-in-from-left duration-300 ${
-        isAI ? "justify-start" : "justify-end"
-      }`}
+    <motion.div
+      initial={{ opacity: 0, x: isAI ? -20 : 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.4 }}
+      className={`flex items-start gap-4 mb-8 last:mb-0 ${isAI ? "justify-start" : "justify-end"}`}
     >
       {isAI && (
-        <div className="flex-shrink-0">
+        <motion.div 
+          className="flex-shrink-0"
+          whileHover={{ scale: 1.05 }}
+        >
           <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/20">
             <SparklesIcon className="h-5 w-5 text-white" />
           </div>
-        </div>
+        </motion.div>
       )}
       <div className="flex flex-col max-w-[80%]">
-        <div
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
           className={`px-6 py-4 rounded-2xl shadow-lg transition-all duration-300 backdrop-blur-sm ${
             isAI
               ? "bg-white/90 border border-slate-200/50"
               : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-xl"
           }`}
+          whileHover={{ scale: 1.01 }}
         >
           {isTyping ? (
             <TypingIndicator progress={progress} />
           ) : result ? (
-            <ResultDisplay result={result} onFollowUpClick={onFollowUpClick} />
+            <>
+              <ResultDisplay result={result} onFollowUpClick={onFollowUpClick} />
+              {hasTextToRead && (
+                <div className="mt-4 flex justify-center">
+                  <motion.button
+                    onClick={() => onReadAloud(responseText)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                      isSpeaking
+                        ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                        : 'bg-indigo-500 hover:bg-indigo-600 text-white'
+                    }`}
+                  >
+                    {isSpeaking ? (
+                      <>
+                        <StopCircleIcon className="h-4 w-4" />
+                        Stop Reading
+                      </>
+                    ) : (
+                      <>
+                        <SpeakerWaveIcon className="h-4 w-4" />
+                        Read Aloud
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              )}
+            </>
           ) : (
             <p className="whitespace-pre-wrap text-sm leading-relaxed">
               {text}
             </p>
           )}
-        </div>
+        </motion.div>
         {timestamp && (
-          <span className={`text-xs mt-2 flex justify-${isAI ? 'start' : 'end'}`}>
+          <motion.span 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className={`text-xs mt-2 flex justify-${isAI ? 'start' : 'end'}`}
+          >
             <span className={`${isAI ? 'text-slate-400' : 'text-white/70'}`}>
               {timestamp}
             </span>
-          </span>
+          </motion.span>
         )}
       </div>
       {!isAI && (
-        <UserCircleIcon className="h-10 w-10 text-indigo-500 flex-shrink-0 ring-2 ring-white/20 rounded-full" />
+        <motion.div 
+          className="h-10 w-10 text-indigo-500 flex-shrink-0 ring-2 ring-white/20 rounded-full" 
+          whileHover={{ scale: 1.1 }}
+        >
+          <UserCircleIcon className="h-10 w-10" />
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }
-
-// ----------------- Header -----------------
+// ----------------- Header (Animated gradient) -----------------
 function Header() {
   return (
-    <div className="flex items-center justify-center gap-4 mb-8 animate-in fade-in duration-500">
-      <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg ring-2 ring-white/20">
+    <motion.div 
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center justify-center gap-4 mb-8"
+    >
+      <motion.div 
+        className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg ring-2 ring-white/20"
+        whileHover={{ rotate: 360, transition: { duration: 0.5 } }}
+      >
         <SparklesIcon className="h-6 w-6 text-white" />
-      </div>
-      <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600">
+      </motion.div>
+      <motion.h1 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600"
+      >
         AI Business Intelligence
-      </h1>
-    </div>
+      </motion.h1>
+    </motion.div>
   );
 }
-
-// ----------------- Loading Screen -----------------
+// ----------------- Loading Screen (More engaging) -----------------
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 flex items-center justify-center">
-      <div className="text-center animate-pulse">
-        <ArrowPathIcon className="h-8 w-8 mx-auto mb-4 text-indigo-600 animate-spin" />
-        <p className="text-slate-600">Loading conversation history...</p>
-      </div>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="text-center"
+      >
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="h-8 w-8 mx-auto mb-4 text-indigo-600"
+        >
+          <ArrowPathIcon className="h-8 w-8" />
+        </motion.div>
+        <motion.p 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-slate-600"
+        >
+          Loading conversation history...
+        </motion.p>
+      </motion.div>
     </div>
   );
 }
-
-// ----------------- Input Bar -----------------
-function InputBar({ inputValue, onChange, onSend, isLoading, placeholder }) {
+// ----------------- Input Bar (Enhanced with focus states and voice animation) -----------------
+function InputBar({ inputValue, onChange, onSend, isLoading, placeholder, onVoiceInput, isListening }) {
   return (
     <div className="sticky bottom-0 mt-8 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-2xl p-4 shadow-2xl">
       <div className="flex gap-3 max-w-4xl mx-auto">
-        <input
+        <motion.button
+          type="button"
+          onClick={onVoiceInput}
+          disabled={isLoading}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          animate={{ scale: isListening ? [1, 1.1, 1] : 1, rotate: isListening ? 5 : 0 }}
+          transition={{ duration: 0.3 }}
+          className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 ${
+            isLoading ? 'bg-slate-400 cursor-not-allowed' :
+            isListening ? 'bg-red-500 hover:bg-red-600 text-white' :
+            'bg-gray-200 hover:bg-gray-300'
+          }`}
+          aria-label={isListening ? "Stop voice input" : "Start voice input"}
+        >
+          {isListening ? (
+            <StopCircleIcon className="h-5 w-5" />
+          ) : (
+            <MicrophoneIcon className={`h-5 w-5 ${isLoading ? 'text-gray-400' : 'text-gray-600'}`} />
+          )}
+        </motion.button>
+        <motion.input
           type="text"
           value={inputValue}
           onChange={onChange}
           onKeyDown={(e) => e.key === "Enter" && !isLoading && onSend()}
           placeholder={placeholder}
           disabled={isLoading}
+          whileFocus={{ scale: 1.02, borderColor: "#4f46e5" }}
           className="flex-1 px-5 py-3 rounded-xl border border-slate-300/60 focus:ring-2 focus:ring-indigo-400/50 focus:border-transparent bg-white/90 text-sm placeholder-slate-500 transition-all duration-200 outline-none"
         />
-        <button
+        <motion.button
           onClick={onSend}
           disabled={!inputValue.trim() || isLoading}
-          className={`px-6 py-3 rounded-xl font-semibold text-white flex items-center gap-2 text-sm transition-all duration-200 transform ${
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className={`px-6 py-3 rounded-xl font-semibold text-white flex items-center gap-2 text-sm transition-all duration-200 ${
             isLoading
               ? "bg-slate-400 cursor-not-allowed scale-95"
-              : "bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-600 hover:via-purple-600 hover:to-blue-600 hover:scale-105 shadow-lg hover:shadow-xl"
+              : "bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 hover:from-indigo-600 hover:via-purple-600 hover:to-blue-600 shadow-lg hover:shadow-xl"
           }`}
         >
           {isLoading ? (
             <>
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="h-4 w-4"
+              >
+                <ArrowPathIcon className="h-4 w-4" />
+              </motion.div>
               Analyzing
             </>
           ) : (
@@ -920,34 +1249,66 @@ function InputBar({ inputValue, onChange, onSend, isLoading, placeholder }) {
               Send
             </>
           )}
-        </button>
+        </motion.button>
       </div>
     </div>
   );
 }
-
-// ----------------- Main AIAssistant (Refactored) -----------------
+// ----------------- Main AIAssistant (Refactored with AnimatePresence for messages) -----------------
 export default function AIAssistant() {
   const { convId } = useParams();
   const [inputValue, setInputValue] = useState("");
+  const [partialTranscript, setPartialTranscript] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentProgress, setCurrentProgress] = useState(null);
   const [hasProcessedUrlQuery, setHasProcessedUrlQuery] = useState(false);
   const [conversationId, setConversationId] = useState(convId || null);
   const token = Cookies.get("access_token");
+  const decoded = token ? jwtDecode(token) : null;
+  const name = decoded ? decoded.user_id || "User" : "User";
   const [messages, setMessages] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const chatEndRef = useRef(null);
+  const recognitionRef = useRef(null);
   const [apiConfig] = useState({
     catalog: "finance_fusion_catalog",
     schema: "finance_fusion_catalog",
     persona: "CFO",
   });
-
+  const initialMessage = useMemo(() => {
+    const now = new Date();
+    const hours = now.getHours();
+    const day = now.toLocaleString("en-US", { weekday: "long" });
+    const timeGreetings = {
+      morning: ["Good morning", "Rise and shine", "Morning vibes incoming"],
+      afternoon: ["Good afternoon", "Keep the momentum", "Midday focus!"],
+      evening: ["Good evening", "Evening reflections", "Twilight thoughts"],
+    };
+    const weekdayMessages = {
+      Monday: ["Fresh start. Let’s uncover key insights."],
+      Tuesday: ["Tuesday’s all about execution and insight."],
+      Wednesday: ["Midweek clarity — optimize and conquer with data."],
+      Thursday: ["Almost there — stay sharp, stay insightful."],
+      Friday: ["Finish strong, you’re almost at the weekend with fresh insights!"],
+      Saturday: ["Weekend mode: balance and brilliant discoveries."],
+      Sunday: ["Recharge, reflect, and reimagine with insights."],
+    };
+    const timePeriod = hours < 12 ? "morning" : hours < 18 ? "afternoon" : "evening";
+    const greeting = timeGreetings[timePeriod][Math.floor(Math.random() * 3)];
+    const todayMsgs = weekdayMessages[day] || ["Discover your next big insight."];
+    const randomMsg = todayMsgs[Math.floor(Math.random() * todayMsgs.length)];
+    const combined = [
+      `${greeting}, ${name}! ${randomMsg}`,
+      `${greeting}, ${name}! Ready to generate powerful insights?`,
+    ];
+    return combined[Math.floor(Math.random() * combined.length)];
+  }, [name]);
+  const showWelcome = !convId && messages.length === 0 && !loadingHistory;
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentProgress]);
-
   useEffect(() => {
     setConversationId(convId || null);
     if (!convId) {
@@ -955,7 +1316,6 @@ export default function AIAssistant() {
       setLoadingHistory(false);
     }
   }, [convId]);
-
   useEffect(() => {
     if (!convId) return;
     setLoadingHistory(true);
@@ -1005,20 +1365,20 @@ export default function AIAssistant() {
             }
           } else if (query.complex_result) {
             result = { ...query.complex_result };
-            
+      
             // Map detailed_findings to key_insights
             if (result.detailed_findings) {
               result.key_insights = result.detailed_findings;
-              delete result.detailed_findings;  // Clean up to avoid confusion
+              delete result.detailed_findings; // Clean up to avoid confusion
             }
-            
+      
             // Merge recommended_actions into suggested_followups (flatten actions)
             if (result.recommended_actions && result.recommended_actions.length > 0) {
               const actions = result.recommended_actions.map((actionObj) => actionObj.action).filter(Boolean);
               result.suggested_followups = [...(result.suggested_followups || []), ...actions];
-              delete result.recommended_actions;  // Clean up
+              delete result.recommended_actions; // Clean up
             }
-            
+      
             // Add charts
             if (query.charts && query.charts.length > 0) {
               result.charts = query.charts;
@@ -1050,21 +1410,6 @@ export default function AIAssistant() {
     };
     fetchConversation();
   }, [convId, token]);
-
-  useEffect(() => {
-    if (convId) return;
-    if (messages.length === 0 && !loadingHistory) {
-      setMessages([{
-        from: "ai",
-        text: "👋 Hello! I'm your AI BI Assistant. What business insight can I help you uncover today?",
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      }]);
-    }
-  }, [convId, loadingHistory, messages.length]);
-
   const sendQuery = useCallback(
     async (text) => {
       if (!conversationId) {
@@ -1245,7 +1590,6 @@ export default function AIAssistant() {
     },
     [token, apiConfig, conversationId]
   );
-
   const handleFollowUpClick = useCallback((text) => {
     if (!text.trim() || isLoading) return;
     const userMessage = {
@@ -1259,7 +1603,6 @@ export default function AIAssistant() {
     setMessages((prev) => [...prev, userMessage]);
     sendQuery(text);
   }, [isLoading, sendQuery]);
-
   const handleSendMessage = () => {
     const text = inputValue;
     if (!text.trim() || isLoading) return;
@@ -1275,7 +1618,171 @@ export default function AIAssistant() {
     setInputValue("");
     sendQuery(text);
   };
-
+  const startVoiceRecognition = useCallback(() => {
+    if (isLoading) return;
+    if (isListening) {
+      // Stop listening
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      setPartialTranscript("");
+      return;
+    }
+    if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+      alert('Voice recognition is not supported in this browser. Please use Chrome or Edge for the best experience.');
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = true; // Enable partial results for real-time feedback
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => {
+      console.log('Voice recognition started');
+      setIsListening(true);
+      setPartialTranscript("");
+      // Optional: Request mic permission if needed
+      navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
+        console.warn('Microphone access denied:', err);
+      });
+    };
+    recognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      // Update partial for real-time preview
+      setPartialTranscript(interimTranscript);
+      // If final, set and send
+      if (finalTranscript) {
+        const fullText = (inputValue + finalTranscript).trim();
+        setInputValue(fullText);
+        setPartialTranscript("");
+        // Auto-send if desired, or wait for user
+        // For now, just set the value; user can press send
+      }
+    };
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      setPartialTranscript("");
+      let errorMessage = 'Voice input error. ';
+      switch (event.error) {
+        case 'not-allowed':
+          errorMessage += 'Microphone permission denied. Please allow access in your browser settings and try again.';
+          break;
+        case 'permission-denied':
+          errorMessage += 'Microphone permission denied. Please allow access and refresh the page.';
+          break;
+        case 'no-speech':
+          errorMessage += 'No speech detected. Please speak louder or closer to the mic. Try again?';
+          break;
+        case 'audio-capture':
+          errorMessage += 'Microphone issue detected. Check your audio settings or try a different device.';
+          break;
+        case 'network':
+          errorMessage += 'Network error. Please check your internet connection and try again.';
+          break;
+        case 'service-not-allowed':
+          errorMessage += 'Speech service not allowed. Please enable it in your browser settings.';
+          break;
+        default:
+          errorMessage += `${event.error}. Please try again.`;
+      }
+      alert(errorMessage);
+    };
+    recognition.onend = () => {
+      console.log('Voice recognition ended');
+      setIsListening(false);
+      setPartialTranscript("");
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+      // If final transcript is empty after end, prompt retry
+      if (!inputValue.trim() && partialTranscript.trim()) {
+        setInputValue(partialTranscript.trim());
+      }
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error('Failed to start recognition:', err);
+      setIsListening(false);
+      alert('Failed to start voice input. Please check your microphone and try again.');
+    }
+  }, [isListening, inputValue, partialTranscript]);
+  const splitTextIntoChunks = (text, maxChunkLength = 300) => {
+    const chunks = [];
+    let currentChunk = '';
+    for (const word of text.split(' ')) {
+      if ((currentChunk + word).length > maxChunkLength) {
+        chunks.push(currentChunk.trim());
+        currentChunk = word + ' ';
+      } else {
+        currentChunk += word + ' ';
+      }
+    }
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
+    return chunks;
+  };
+  const readAloud = (text) => {
+    if (isSpeaking) {
+      stopReading();
+      return;
+    }
+    const chunks = splitTextIntoChunks(text);
+    let currentChunkIndex = 0;
+    const speakChunk = () => {
+      if (currentChunkIndex >= chunks.length) {
+        setIsSpeaking(false);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(chunks[currentChunkIndex]);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => {
+        currentChunkIndex++;
+        speakChunk();
+      };
+      utterance.onerror = (event) => {
+        if (event.error !== 'interrupted') {
+          console.error('Speech synthesis error:', event);
+          alert('An error occurred while reading aloud.');
+        }
+        setIsSpeaking(false);
+      };
+      if (speechSynthesis.speaking || speechSynthesis.pending) {
+        speechSynthesis.cancel();
+      }
+      try {
+        speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error('Failed to start speech synthesis:', error);
+        alert('Unable to start speech synthesis.');
+        setIsSpeaking(false);
+      }
+    };
+    speakChunk();
+  };
+  const stopReading = () => {
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
   useEffect(() => {
     if (hasProcessedUrlQuery) return;
     const params = new URLSearchParams(window.location.search);
@@ -1350,23 +1857,56 @@ export default function AIAssistant() {
     }
     sendQuery(query);
   }, [hasProcessedUrlQuery, sendQuery]);
-
   if (loadingHistory) {
     return <LoadingScreen />;
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 flex flex-col">
       <div className="max-w-4xl w-full mx-auto p-6 flex flex-col flex-grow">
         <Header />
-        <div className="flex-1 bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl p-6 shadow-xl overflow-y-auto space-y-6">
-          {messages.map((msg, idx) => (
-            <Message key={idx} {...msg} onFollowUpClick={handleFollowUpClick} />
-          ))}
-          {isLoading && currentProgress && (
-            <Message from="ai" isTyping progress={currentProgress} />
+        <div className={`bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl overflow-y-auto flex flex-col ${showWelcome ? 'items-center justify-center p-8 space-y-8' : 'p-6 space-y-6'}`}>
+          {showWelcome ? (
+            <>
+              <motion.h1
+                className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-800 via-indigo-700 to-purple-700 text-5xl md:text-6xl leading-tight text-center tracking-tight"
+                style={{
+                  backgroundSize: "200% auto",
+                  animation: "gradientMove 8s ease infinite",
+                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+              >
+                {initialMessage}
+              </motion.h1>
+              <motion.p
+                className="text-lg md:text-2xl text-gray-600 font-light leading-relaxed text-center max-w-2xl"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.8 }}
+              >
+                I read your AP data so you don’t have to — from cash flow signals to compliance risks. What shall we decode today?
+              </motion.p>
+            </>
+          ) : (
+            <>
+              <AnimatePresence>
+                {messages.map((msg, idx) => (
+                  <Message
+                    key={`${msg.from}-${idx}-${msg.timestamp || Date.now()}`}
+                    {...msg}
+                    onFollowUpClick={handleFollowUpClick}
+                    onReadAloud={readAloud}
+                    isSpeaking={isSpeaking}
+                  />
+                ))}
+              </AnimatePresence>
+              {isLoading && currentProgress && (
+                <Message from="ai" isTyping progress={currentProgress} />
+              )}
+              <div ref={chatEndRef} />
+            </>
           )}
-          <div ref={chatEndRef} />
         </div>
         <InputBar
           inputValue={inputValue}
@@ -1374,8 +1914,16 @@ export default function AIAssistant() {
           onSend={handleSendMessage}
           isLoading={isLoading}
           placeholder="Ask about your business data... (e.g., 'What drove Q2 tax increases?')"
+          onVoiceInput={startVoiceRecognition}
+          isListening={isListening}
         />
       </div>
+      <style>{`
+        @keyframes gradientMove {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+      `}</style>
     </div>
   );
 }

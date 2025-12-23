@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 
 // Create axios instance with custom config
 const axiosInstance = axios.create({
-    baseURL: 'https://caf360107243.ngrok-free.app/api/v1',
+    baseURL: 'https://somehow-alarm-arrives-basement.trycloudflare.com/api/v1',
     timeout: 30000, // 30 seconds
     headers: {
         'Content-Type': 'application/json'
@@ -15,7 +15,7 @@ axiosInstance.interceptors.request.use(
     (config) => {
         // Get the token from cookies
         const token = Cookies.get('access_token');
-        
+      
         // If token exists, add it to the headers
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
