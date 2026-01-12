@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import * as htmlToImage from "html-to-image";
-import { formatDate, formatNumber } from "../utils/utils";
+import { formatNumber } from "../utils/utils";
 import { getRoleFromToken } from "../utils/utils";
 import ChartRenderer from "./ChartRenderer";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -27,8 +27,8 @@ import {
   PhotoIcon,
   ArrowDownTrayIcon,
   ExclamationTriangleIcon,
-  ArrowUpIcon,
-  ArrowDownIcon,
+  ArrowTrendingUpIcon as TrendUpIcon,
+  ArrowTrendingDownIcon as TrendDownIcon,
   MagnifyingGlassIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -187,10 +187,14 @@ const SummaryModal = React.memo(({ isOpen, onClose, summary }) => {
   const { title, alert_level, current_state, drivers } = summary;
   const getAlertColor = (level) => {
     switch (level) {
-      case "danger": return "from-red-500 to-red-600";
-      case "warning": return "from-yellow-500 to-yellow-600";
-      case "info": return "from-blue-500 to-blue-600";
-      default: return "from-gray-500 to-gray-600";
+      case "danger":
+        return "from-red-500 to-red-600";
+      case "warning":
+        return "from-yellow-500 to-yellow-600";
+      case "info":
+        return "from-blue-500 to-blue-600";
+      default:
+        return "from-gray-500 to-gray-600";
     }
   };
   return (
@@ -203,66 +207,101 @@ const SummaryModal = React.memo(({ isOpen, onClose, summary }) => {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`p-6 border-b flex items-center justify-between ${alert_level ? `bg-gradient-to-r ${getAlertColor(alert_level)} text-white` : 'bg-gray-50'}`}>
+        <div
+          className={`p-6 border-b flex items-center justify-between ${
+            alert_level
+              ? `bg-gradient-to-r ${getAlertColor(alert_level)} text-white`
+              : "bg-gray-50"
+          }`}
+        >
           <div className="flex items-center gap-3">
             <InformationCircleIcon className="h-6 w-6" />
             <h2 className="text-xl font-bold">{title}</h2>
             {alert_level && (
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${alert_level === 'info' ? 'bg-blue-200 text-blue-800' : alert_level === 'warning' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                  alert_level === "info"
+                    ? "bg-blue-200 text-blue-800"
+                    : alert_level === "warning"
+                    ? "bg-yellow-200 text-yellow-800"
+                    : "bg-red-200 text-red-800"
+                }`}
+              >
                 {alert_level}
               </span>
             )}
           </div>
           <button
             onClick={onClose}
-            className={`p-2 rounded-xl transition-all duration-300 ${alert_level ? 'text-white/70 hover:text-white hover:bg-white/20' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+            className={`p-2 rounded-xl transition-all duration-300 ${
+              alert_level
+                ? "text-white/70 hover:text-white hover:bg-white/20"
+                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            }`}
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
-        {/* Current State */}
-        {current_state && (
-          <div className="flex-1 p-6 space-y-6 overflow-auto">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Current State</h3>
-              {current_state.primary_metric && (
-                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-2xl border border-indigo-200/50">
-                  <p className="text-sm text-gray-600 mb-2">{current_state.primary_metric.label}</p>
-                  <p className="text-3xl font-bold text-gray-900">{current_state.primary_metric.value}</p>
-                </div>
-              )}
-              {current_state.secondary_metrics && current_state.secondary_metrics.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  {current_state.secondary_metrics.map((metric, idx) => (
-                    <div key={idx} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                      <p className="text-sm text-gray-600">{metric.label}</p>
-                      <p className="text-lg font-semibold text-gray-900">{metric.value}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {/* Drivers */}
-            {drivers && drivers.length > 0 && (
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Key Drivers</h3>
-                <div className="space-y-4">
-                  {drivers.map((driver, idx) => (
-                    <div key={idx} className="bg-gradient-to-r from-gray-50 to-indigo-50 p-4 rounded-xl border border-gray-200">
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl">{driver.icon}</span>
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900 mb-1">{driver.title}</h4>
-                          <p className="text-sm text-gray-600">{driver.description}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {/* Summary: Primary Driver / Secondary Contributors / Actionable Root Cause */}
+        <div className="flex-1 p-6 space-y-6 overflow-auto">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Primary Driver
+            </h3>
+            {drivers && drivers.length > 0 ? (
+              <div className="bg-white p-4 rounded-2xl border border-gray-200">
+                <p className="text-base font-semibold text-gray-900">
+                  {drivers[0].title}
+                </p>
+                {drivers[0].description && (
+                  <p className="text-sm text-gray-600 mt-1">
+                    {drivers[0].description}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white p-4 rounded-2xl border border-gray-200 text-sm text-gray-600">
+                No primary driver available.
               </div>
             )}
           </div>
-        )}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Secondary Contributors
+            </h3>
+            {drivers && drivers.length > 1 ? (
+              <ul className="list-disc list-inside space-y-1">
+                {drivers.slice(1).map((d, i) => (
+                  <li key={i} className="text-sm text-gray-700">
+                    <span className="font-medium">{d.title}</span>
+                    {d.description && (
+                      <span className="text-gray-600"> — {d.description}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-600">
+                No secondary contributors identified.
+              </p>
+            )}
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Actionable Root Cause
+            </h3>
+            <div className="bg-white p-4 rounded-2xl border border-gray-200">
+              <p className="text-sm text-gray-700">
+                {summary.actionable_root_cause ||
+                  summary.actionable_root ||
+                  summary.root_cause ||
+                  (drivers && drivers.length > 0
+                    ? drivers[0].description
+                    : "No actionable root cause provided.")}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -277,20 +316,21 @@ const iconMap = {
 };
 // Sidebar Context for sharing collapsed state
 const SidebarContext = React.createContext({ isCollapsed: false });
-const isCurrencyKPI = (title) => {
-  const currencyWords = [
-    "amount",
-    "spend",
-    "cost",
-    "expense",
-    "revenue",
-    "budget",
-    "invoice",
-    "payment",
-    "cash",
-    "dollar",
-  ];
-  return currencyWords.some((word) => title.toLowerCase().includes(word));
+const isCurrencyKPI = (kpi) => {
+  const title = kpi.title || "";
+  const lowerTitle = title.toLowerCase();
+  return (
+    lowerTitle.includes("amount") ||
+    lowerTitle.includes("spend") ||
+    lowerTitle.includes("cost") ||
+    lowerTitle.includes("expense") ||
+    lowerTitle.includes("revenue") ||
+    lowerTitle.includes("budget") ||
+    lowerTitle.includes("invoice") ||
+    lowerTitle.includes("payment") ||
+    lowerTitle.includes("cash") ||
+    lowerTitle.includes("dollar")
+  );
 };
 const downloadCSV = (data, filename) => {
   if (!data || data.length === 0) return;
@@ -751,6 +791,21 @@ export default function Dashboard() {
     let detailLine1 = null;
     let detailLine2 = null;
     let hasError = false;
+    let iconKey = "chart"; // Default icon
+    // Determine icon based on title
+    const lowerTitle = k.title.toLowerCase();
+    if (
+      lowerTitle.includes("dollar") ||
+      lowerTitle.includes("revenue") ||
+      lowerTitle.includes("spend") ||
+      lowerTitle.includes("cost")
+    ) {
+      iconKey = "dollar";
+    } else if (lowerTitle.includes("cash")) {
+      iconKey = "cash";
+    } else if (lowerTitle.includes("trend")) {
+      iconKey = "trend";
+    }
     // Check for errors first
     if (k.has_error || k.sql_error || !k.data || k.data.length === 0) {
       hasError = true;
@@ -774,9 +829,13 @@ export default function Dashboard() {
         if (row.comparison_value && row.comparison_label) {
           const ratio = parseFloat(row.comparison_value);
           if (!isNaN(ratio)) {
-            const pctChange = ratio * 100;
-            change = `${pctChange > 0 ? "+" : ""}${Math.round(pctChange)}%`;
-            changeType = pctChange > 0 ? "positive" : (pctChange < 0 ? "negative" : null);
+            // ratio is expected as a decimal (e.g. -0.564 for -56.4%)
+            const pctChange = Number(ratio);
+            if (!Number.isNaN(pctChange)) {
+              change = `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(2)}%`;
+              changeType =
+                pctChange > 0 ? "positive" : pctChange < 0 ? "negative" : null;
+            }
           }
           formattedComparison = row.comparison_label || "vs previous period";
         }
@@ -815,6 +874,7 @@ export default function Dashboard() {
       hasError,
       metricType: isCurrencyKPI(k.title) ? "currency" : "number", // Infer metric type
       formatConfig: { show_trend: true }, // Default to show trend for comparisons
+      iconKey,
     };
   };
   const generateDashboard = async () => {
@@ -904,7 +964,8 @@ export default function Dashboard() {
         if (data.message) setMessage(data.message);
         if (data.card) {
           const k = data.card;
-          const id = k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
+          const id =
+            k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
           if (!orderedKpiIdsRef.current.includes(id))
             orderedKpiIdsRef.current.push(id);
           // Updated: Process the card data directly (no second param needed)
@@ -925,7 +986,9 @@ export default function Dashboard() {
         if (data.message) setMessage(data.message);
         // Note the completion of cards, update message if needed
         if (data.successful_cards === 0) {
-          toast.warning(`All ${data.total_cards} KPI cards encountered errors.`);
+          toast.warning(
+            `All ${data.total_cards} KPI cards encountered errors.`
+          );
         }
         break;
       case "kpi_complete": {
@@ -1008,7 +1071,8 @@ export default function Dashboard() {
         const finalRes = data.result;
         if (finalRes?.kpi_cards?.length) {
           finalRes.kpi_cards.forEach((k) => {
-            const id = k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
+            const id =
+              k.title.replace(/\s+/g, "*").toLowerCase() || JSON.stringify(k);
             if (!orderedKpiIdsRef.current.includes(id))
               orderedKpiIdsRef.current.push(id);
             // Updated: Process each final KPI card
@@ -1232,15 +1296,17 @@ export default function Dashboard() {
     const LG_COLS = 12;
     const MD_COLS = 12;
     const SM_COLS = 6;
-    const KPI_WIDTH_LG = 3; // Adjusted for 4 per row: 12 / 4 = 3
-  const KPI_HEIGHT_LG = 4; // Slightly increased to reduce cramped layout
-    const KPI_WIDTH_MD = 3; // Same for md: 4 per row
-  const KPI_HEIGHT_MD = 4;
-    const KPI_WIDTH_SM = 3; // 6 / 3 = 2 per row on sm
-  const KPI_HEIGHT_SM = 4;
-    const KPIS_PER_ROW_LG = 4; // Maximum 4 per row
-    const KPIS_PER_ROW_MD = 4;
-    const KPIS_PER_ROW_SM = 2;
+    // Use 3 KPI cards per row on large/medium breakpoints: each card spans 4 columns (12 / 3 = 4)
+    const KPI_WIDTH_LG = 4; // 12 / 3 = 4
+    const KPI_HEIGHT_LG = 4; // Slightly increased to reduce cramped layout
+    const KPI_WIDTH_MD = 4; // 12 / 3 = 4
+    const KPI_HEIGHT_MD = 4;
+    // On small screens we keep 2 per row (6 / 3 = 2 columns per card when KPI_WIDTH_SM=3)
+    const KPI_WIDTH_SM = 3; // 6 / 3 = 2 per row visually
+    const KPI_HEIGHT_SM = 4;
+    const KPIS_PER_ROW_LG = 3; // 3 per row on lg
+    const KPIS_PER_ROW_MD = 3; // 3 per row on md
+    const KPIS_PER_ROW_SM = 2; // 2 per row on sm
     const CHART_WIDTH_LG = 6;
     const CHART_HEIGHT_LG = 8; // Reduced height for more compact layout while maintaining good aspect ratio for financial charts
     const CHARTS_PER_ROW_LG = 2;
@@ -1253,10 +1319,18 @@ export default function Dashboard() {
     const KPI_MAX_H_LG = 6; //
     const CHART_MAX_W_LG = 12; //
     const CHART_MAX_H_LG = 16; //
-    const cardIds = orderedKpiIdsRef.current.filter(
-      (id) => kpiMapRef.current.get(id)?.isKpiCard
-    );
-    cardIds.forEach((id, i) => {
+    // Separate normal and proactive KPI cards
+    const normalCardIds = orderedKpiIdsRef.current.filter((id) => {
+      const k = kpiMapRef.current.get(id);
+      return k?.isKpiCard && !k.is_proactive;
+    });
+    const proactiveCardIds = orderedKpiIdsRef.current.filter((id) => {
+      const k = kpiMapRef.current.get(id);
+      return k?.isKpiCard && k.is_proactive;
+    });
+    // Place normal KPIs in first row(s)
+    let currentY_lg = 0;
+    normalCardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
         x: (i % KPIS_PER_ROW_LG) * KPI_WIDTH_LG,
@@ -1265,12 +1339,37 @@ export default function Dashboard() {
         h: KPI_HEIGHT_LG,
         minW: 2, // Slightly lower min for flexibility
         maxW: KPI_MAX_W_LG,
-  minH: 3, // restore sensible minimum height
+        minH: 3, // restore sensible minimum height
         maxH: KPI_MAX_H_LG,
       };
       lg.push(item);
+      currentY_lg = Math.max(currentY_lg, item.y + item.h);
     });
-    cardIds.forEach((id, i) => {
+    // Place proactive KPIs in one row, with dynamic reduced width to fit all
+    const proactiveCount = proactiveCardIds.length;
+    if (proactiveCount > 0) {
+      const proactiveW_lg = Math.floor(LG_COLS / proactiveCount);
+      let proactiveX_lg = 0;
+      proactiveCardIds.forEach((id) => {
+        const item = {
+          i: `kpi-${id}`,
+          x: proactiveX_lg,
+          y: currentY_lg,
+          w: proactiveW_lg,
+          h: KPI_HEIGHT_LG,
+          minW: 2,
+          maxW: KPI_MAX_W_LG,
+          minH: 3,
+          maxH: KPI_MAX_H_LG,
+        };
+        lg.push(item);
+        proactiveX_lg += proactiveW_lg;
+      });
+      currentY_lg += KPI_HEIGHT_LG;
+    }
+    // Similar for md breakpoint
+    let currentY_md = 0;
+    normalCardIds.forEach((id, i) => {
       const item = {
         i: `kpi-${id}`,
         x: (i % KPIS_PER_ROW_MD) * KPI_WIDTH_MD,
@@ -1279,14 +1378,36 @@ export default function Dashboard() {
         h: KPI_HEIGHT_MD,
         minW: 2,
         maxW: KPI_MAX_W_LG,
-  minH: 3,
+        minH: 3,
         maxH: KPI_MAX_H_LG,
       };
       md.push(item);
+      currentY_md = Math.max(currentY_md, item.y + item.h);
     });
-    // KPIs for sm: 2 per row
-    cardIds.forEach((id, i) => {
-      sm.push({
+    if (proactiveCount > 0) {
+      const proactiveW_md = Math.floor(MD_COLS / proactiveCount);
+      let proactiveX_md = 0;
+      proactiveCardIds.forEach((id) => {
+        const item = {
+          i: `kpi-${id}`,
+          x: proactiveX_md,
+          y: currentY_md,
+          w: proactiveW_md,
+          h: KPI_HEIGHT_MD,
+          minW: 2,
+          maxW: KPI_MAX_W_LG,
+          minH: 3,
+          maxH: KPI_MAX_H_LG,
+        };
+        md.push(item);
+        proactiveX_md += proactiveW_md;
+      });
+      currentY_md += KPI_HEIGHT_MD;
+    }
+    // For sm breakpoint
+    let currentY_sm = 0;
+    normalCardIds.forEach((id, i) => {
+      const item = {
         i: `kpi-${id}`,
         x: (i % KPIS_PER_ROW_SM) * KPI_WIDTH_SM,
         y: Math.floor(i / KPIS_PER_ROW_SM) * KPI_HEIGHT_SM,
@@ -1294,13 +1415,35 @@ export default function Dashboard() {
         h: KPI_HEIGHT_SM,
         minW: 2,
         maxW: 4, // Slightly increased
-  minH: 3, // Adjusted minH to match slightly increased height
+        minH: 3, // Adjusted minH to match slightly increased height
         maxH: 6, // Increased
-      });
+      };
+      sm.push(item);
+      currentY_sm = Math.max(currentY_sm, item.y + item.h);
     });
-    // Charts start after KPIs
-    const chartsStartY_lg_md =
-      Math.ceil(cardIds.length / KPIS_PER_ROW_LG) * KPI_HEIGHT_LG;
+    if (proactiveCount > 0) {
+      const proactiveW_sm = Math.floor(SM_COLS / proactiveCount);
+      let proactiveX_sm = 0;
+      proactiveCardIds.forEach((id) => {
+        const item = {
+          i: `kpi-${id}`,
+          x: proactiveX_sm,
+          y: currentY_sm,
+          w: proactiveW_sm,
+          h: KPI_HEIGHT_SM,
+          minW: 2,
+          maxW: 4,
+          minH: 3,
+          maxH: 6,
+        };
+        sm.push(item);
+        proactiveX_sm += proactiveW_sm;
+      });
+      currentY_sm += KPI_HEIGHT_SM;
+    }
+    // Charts start after all KPIs
+    const chartsStartY_lg_md = currentY_lg;
+    const chartsStartY_sm = currentY_sm;
     // Charts for lg: strictly 2 per row
     orderedChartIdsRef.current.forEach((id, index) => {
       const w = CHART_WIDTH_LG;
@@ -1344,16 +1487,14 @@ export default function Dashboard() {
       md.push(item);
     });
     // Charts for sm: vertical stack, full width
-    const chartsStartY_sm =
-      Math.ceil(cardIds.length / KPIS_PER_ROW_SM) * KPI_HEIGHT_SM;
-    let currentY_sm = chartsStartY_sm;
+    let currentY_sm_charts = chartsStartY_sm;
     orderedChartIdsRef.current.forEach((id) => {
       const w = CHART_WIDTH_SM;
       const h = CHART_HEIGHT_SM;
       sm.push({
         i: `chart-${id}`,
         x: 0,
-        y: currentY_sm,
+        y: currentY_sm_charts,
         w: w,
         h: h,
         minW: 5,
@@ -1361,14 +1502,15 @@ export default function Dashboard() {
         minH: 7,
         maxH: 13,
       });
-      currentY_sm += h;
+      currentY_sm_charts += h;
     });
     setLayouts({ lg, md, sm });
   }, [kpis.length, charts.length]); // Only regenerate after hasGenerated and lengths stable
   const cfoSuggestions = [
     "Strategic Financial Insights",
-    "Spend Trend Analysis",
-    "Vendor Concentration Risk",
+    "Strengthen liquidity & cash control",
+    "Optimize working capital (DPO, AP leverage)",
+    "Reduce payment & vendor risk",
   ];
   const personaOptions = [
     { value: "CFO", label: "CFO" },
@@ -1418,10 +1560,11 @@ export default function Dashboard() {
         const drillEnabled = true; // Enabled by default for all charts to make them clickable
         return (
           <div key={`chart-${id}`}>
-            <div className="group/chart bg-purple-100/90 hover:bg-purple-100/95 transition-colors duration-500 rounded-3xl border border-white/40 shadow-2xl h-full flex flex-col overflow-hidden cursor-move hover:shadow-3xl hover:shadow-purple-200/50 backdrop-blur-xl">
-              <div className="px-6 py-5 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-purple-50/50 via-purple-100/50 to-purple-50/50">
+            <div className="group/chart bg-white/90 hover:bg-white/95 transition-colors duration-500 rounded-3xl border border-gray-200/40 shadow-2xl h-full flex flex-col overflow-hidden cursor-move hover:shadow-3xl hover:shadow-purple-200/50 backdrop-blur-xl">
+              <div className="px-6 py-5 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 via-gray-100/50 to-gray-50/50">
                 <div className="flex flex-col flex-1 min-w-0">
                   <div className="flex items-center gap-2">
+                    <ChartBarIcon className="h-5 w-5 text-purple-600 flex-shrink-0" />
                     <h2 className="flex-1 min-w-0 text-lg font-bold text-gray-800 truncate">
                       {title}
                     </h2>
@@ -1452,7 +1595,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/chart:opacity-100 transition-all duration-300">
                   {chart.error && (
-                    <span className="text-gray-400 hover:text-red-500 p-1 rounded-xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md">
+                    <span className="text-gray-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md">
                       <ExclamationTriangleIcon className="h-4 w-4" />
                     </span>
                   )}
@@ -1821,7 +1964,6 @@ export default function Dashboard() {
                     <span>Generating Insights</span>
                   </div>
                 )}
-              
               </span>
               <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-pink-600 bg-clip-text text-transparent drop-shadow-sm">
                 {progress}%
@@ -1851,8 +1993,9 @@ export default function Dashboard() {
             breakpoints={{ lg: 1200, md: 900, sm: 768 }}
             cols={{ lg: 12, md: 12, sm: 6 }}
             rowHeight={44}
-            margin={[18, 26]}
-            containerPadding={[16, 16]}
+            // Reduced margins and container padding to tighten spacing between KPI cards
+            margin={[12, 12]}
+            containerPadding={[8, 8]}
             isDraggable
             isResizable
             compactType={freeformMode ? null : "vertical"}
@@ -1868,21 +2011,38 @@ export default function Dashboard() {
             {kpis
               .filter((k) => k.isKpiCard)
               .map((kpi) => {
-                const isCurrency = isCurrencyKPI(kpi.title) || kpi.metricType === "currency";
-                const hasError = kpi.hasError || kpi.sql_error || kpi.formattedValue === "Error" || kpi.formattedValue === "N/A";
-                const bgGradient = hasError
-                  ? "from-red-50/80 via-red-100/80 to-red-50/80"
+                const isCurrency =
+                  isCurrencyKPI(kpi.title) || kpi.metricType === "currency";
+                const hasError =
+                  kpi.hasError ||
+                  kpi.sql_error ||
+                  kpi.formattedValue === "Error" ||
+                  kpi.formattedValue === "N/A";
+                const valueColor = hasError
+                  ? "text-red-600"
                   : isCurrency
-                  ? "from-emerald-50/80 via-emerald-100/80 to-indigo-50/80"
-                  : "from-indigo-50/80 via-purple-50/80 to-pink-50/80";
-                const textGradient = hasError
-                  ? "from-red-600 to-red-700"
-                  : isCurrency
-                  ? "from-emerald-600 to-emerald-700"
-                  : "from-indigo-600 via-purple-600 to-pink-600";
+                  ? "text-emerald-600"
+                  : "text-indigo-600";
+                const Icon = iconMap[kpi.iconKey] || ChartBarIcon;
                 // Prepare a cleaned comparison label (remove parenthetical dates like '(2025-11-01 00:00:00+00)')
-                const rawComparisonLabel = kpi.formattedComparison || kpi.comparison_label || "vs previous";
-                const displayComparisonLabel = String(rawComparisonLabel).replace(/\s*\(.*?\)/, "").trim();
+                const rawComparisonLabel =
+                  kpi.formattedComparison ||
+                  kpi.comparison_label ||
+                  "vs previous";
+                const displayComparisonLabel = String(rawComparisonLabel)
+                  .replace(/\s*\(.*?\)/, "")
+                  .trim();
+                // Different UX for proactive: use a different gradient background, add BoltIcon, and "Proactive Insight" badge
+                const isProactive = kpi.is_proactive;
+                const cardBgClass = isProactive
+                  ? "bg-gradient-to-br from-blue-50/90 to-indigo-50/90 hover:from-blue-100/95 to-indigo-100/95"
+                  : "bg-white/90 hover:bg-white/95";
+                const borderClass = isProactive
+                  ? "border-blue-200/40"
+                  : "border-gray-200/40";
+                const shadowHover = isProactive
+                  ? "hover:shadow-blue-200/50"
+                  : "hover:shadow-indigo-200/50";
                 return (
                   <div key={`kpi-${kpi.id}`}>
                     <ErrorBoundary
@@ -1894,101 +2054,127 @@ export default function Dashboard() {
                       }
                     >
                       <div
-                        className={`group relative rounded-3xl border border-white/40 shadow-2xl h-full p-4 cursor-move hover:shadow-3xl hover:shadow-indigo-200/50 transition-all duration-700 flex flex-col justify-between overflow-hidden bg-gradient-to-br ${bgGradient} backdrop-blur-xl hover:-translate-y-2 active:scale-[0.98]`}
+                        className={`group/kpi ${cardBgClass} transition-colors duration-500 rounded-3xl ${borderClass} shadow-2xl h-full flex flex-col overflow-hidden cursor-move ${shadowHover} backdrop-blur-xl ${
+                          hasError ? "border-red-200/50" : ""
+                        }`}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <div className="flex flex-col h-full relative z-10">
-                          {/* Simplified: Only title at top */}
-                          <div className="mb-4 flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <h3
-                                className="text-base sm:text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent leading-tight truncate"
-                                title={kpi.title}
+                        <div className="px-6 py-5 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 via-gray-100/50 to-gray-50/50">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <Icon className="h-5 w-5 text-indigo-600 flex-shrink-0" />
+                            <h3
+                              className="text-lg font-bold text-gray-800 leading-tight truncate"
+                              title={kpi.title}
+                            >
+                              {kpi.title}
+                            </h3>
+                            {isProactive && (
+                              <span className="ml-2 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-100 rounded-full flex items-center gap-1">
+                                <BoltIcon className="h-3 w-3" />
+                                Proactive
+                              </span>
+                            )}
+                            {kpi.description && (
+                              <div
+                                className="relative group/desc flex-shrink-0"
+                                role="tooltip"
+                                aria-label="KPI description"
                               >
-                                {kpi.title}
-                              </h3>
-                              {kpi.description && (
-                                <p
-                                  className="text-xs text-gray-600 mt-1 truncate"
-                                  title={kpi.description}
-                                >
-                                  {kpi.description}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {kpi.summary && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    handleOpenSummary(kpi.summary);
-                                  }}
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                  }}
-                                  className="relative opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-500 transition-all duration-300 p-2 rounded-2xl hover:bg-indigo-50/80 backdrop-blur-sm border border-indigo-200/50 hover:shadow-md hover:shadow-indigo-100/50"
-                                  title="View Summary"
-                                  aria-label="View KPI summary"
-                                >
-                                  <InformationCircleIcon className="h-4 w-4" />
-                                </button>
-                              )}
+                                <InformationCircleIcon className="h-4 w-4 text-gray-400 flex-shrink-0 transition-all duration-300 group-hover/desc:scale-110 group-hover/desc:text-indigo-500 cursor-help" />
+                                <div className="invisible group-hover/desc:visible absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gradient-to-r from-gray-900/95 to-gray-800/95 text-white text-xs px-4 py-3 rounded-2xl z-[9999] whitespace-pre-wrap max-w-md shadow-2xl backdrop-blur-md border border-white/30 transition-all duration-300 opacity-0 group-hover/desc:opacity-100 group-hover/desc:translate-y-1">
+                                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                                    <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900/95 rotate-180" />
+                                  </div>
+                                  <p className="relative z-10 leading-relaxed">
+                                    {kpi.description}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/kpi:opacity-100 transition-all duration-300">
+                            {kpi.summary && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
-                                  deleteItem(kpi.id, true);
+                                  handleOpenSummary(kpi.summary);
                                 }}
                                 onMouseDown={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
                                 }}
-                                className="relative opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all duration-300 p-2 rounded-2xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md hover:shadow-red-100/50"
-                                title="Delete KPI"
-                                aria-label="Delete this KPI"
+                                className="group relative text-gray-400 hover:text-indigo-500 p-1.5 rounded-xl hover:bg-indigo-50/80 backdrop-blur-sm border border-indigo-200/50 hover:shadow-md hover:shadow-indigo-100/50 transition-all duration-300 active:scale-95"
+                                title="View Summary"
+                                aria-label="View KPI summary"
                               >
-                                <TrashIcon className="h-4 w-4" />
+                                <InformationCircleIcon className="h-4 w-4" />
                               </button>
-                            </div>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                deleteItem(kpi.id, true);
+                              }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                              }}
+                              className="group relative text-gray-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50/80 backdrop-blur-sm border border-red-200/50 hover:shadow-md hover:shadow-red-100/50 transition-all duration-300 active:scale-95"
+                              title="Delete KPI"
+                              aria-label="Delete this KPI"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
                           </div>
-                          {/* Simplified: Only value and change */}
-                          <div className="flex-1 flex flex-col items-start justify-end gap-3">
+                        </div>
+                        <div className="flex-1 px-6 py-4 relative overflow-hidden bg-white">
+                          {/* Updated: Value, change as small text line, then detail lines */}
+                          <div className="flex flex-col items-start gap-1">
                             <span
-                              className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r ${textGradient} bg-clip-text text-transparent leading-tight drop-shadow-lg animate-fade-in-up`}
+                              className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold ${valueColor} leading-tight drop-shadow-lg animate-fade-in-up`}
                             >
                               {hasError ? "Error" : kpi.formattedValue}
                             </span>
-                            {/* Change indicator with improved UX: Larger, with icon and subtle animation */}
+                            {/* Change as small text line below value below */}
                             {kpi.change && kpi.formatConfig?.show_trend && (
-                              <div
-                                className={`relative flex items-center gap-2 p-4 rounded-2xl shadow-lg transition-all duration-500 min-w-0 flex-shrink-0 ${
-                                  kpi.changeType === "positive"
-                                    ? "bg-gradient-to-br from-emerald-50/90 to-emerald-100/90 border border-emerald-200/60 text-emerald-700 hover:from-emerald-100/90 hover:to-emerald-200/90 hover:shadow-emerald-200/50 animate-pulse-subtle"
-                                    : "bg-gradient-to-br from-red-50/90 to-red-100/90 border border-red-200/60 text-red-700 hover:from-red-100/90 hover:to-red-200/90 hover:shadow-red-200/50 animate-pulse-subtle"
-                                }`}
-                              >
-                                <div className={`flex-shrink-0 ${kpi.changeType === "positive" ? "text-emerald-500" : "text-red-500"}`}>
-                                  {kpi.changeType === "positive" ? (
-                                    <ArrowUpIcon className="h-5 w-5 animate-bounce-subtle" />
-                                  ) : (
-                                    <ArrowDownIcon className="h-5 w-5 animate-bounce-subtle" />
-                                  )}
-                                </div>
-                                <div className="text-lg font-bold">
+                              <p className="text-sm text-gray-600 flex items-center gap-1">
+                                {kpi.changeType === "positive" ? (
+                                  <TrendUpIcon className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                ) : (
+                                  <TrendDownIcon className="h-4 w-4 text-red-500 flex-shrink-0" />
+                                )}
+                                <span
+                                  className={`font-medium ${
+                                    kpi.changeType === "positive"
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
                                   {kpi.change}
-                                </div>
-                                <div className="text-xs text-gray-500 font-medium ml-auto truncate" title={rawComparisonLabel}>
+                                </span>
+                                <span className="ml-1">
                                   {displayComparisonLabel}
-                                </div>
-                              </div>
+                                </span>
+                              </p>
                             )}
-                            {/* If no change, show neutral placeholder */}
-                            {!kpi.change && !hasError && (
-                              <div className="text-sm text-gray-500 font-medium bg-gray-100/60 px-4 py-2 rounded-xl">
-                                No change data
-                              </div>
+                            {/* Detail line 1 */}
+                            {kpi.detailLine1 && (
+                              <p
+                                className="text-xs text-gray-500 truncate"
+                                title={kpi.detailLine1}
+                              >
+                                {kpi.detailLine1}
+                              </p>
+                            )}
+                            {/* Detail line 2 */}
+                            {kpi.detailLine2 && (
+                              <p
+                                className="text-xs text-gray-500 truncate"
+                                title={kpi.detailLine2}
+                              >
+                                {kpi.detailLine2}
+                              </p>
                             )}
                           </div>
                           {hasError && (
@@ -2019,7 +2205,7 @@ export default function Dashboard() {
             Ready to Illuminate Your Finances?
           </h3>
           <p className="text-sm text-gray-600 font-medium mb-8 max-w-md leading-relaxed">
-            Click "Generate Dashboard" to craft a personalized financial
+            Click "Generate Dashboard" to start a personalized financial
             dashboard brimming with actionable insights.
           </p>
           <button
@@ -2071,7 +2257,7 @@ export default function Dashboard() {
                                 <th
                                   key={key}
                                   className="px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider"
-                                  style={{ minWidth: '120px' }}
+                                  style={{ minWidth: "120px" }}
                                 >
                                   {key
                                     .replace(/_/g, " ")
@@ -2087,7 +2273,9 @@ export default function Dashboard() {
                                 <tr
                                   key={idx}
                                   className={`group hover:bg-indigo-50/50 transition-all duration-200 ${
-                                    idx % 2 === 0 ? "bg-white/30" : "bg-indigo-50/20"
+                                    idx % 2 === 0
+                                      ? "bg-white/30"
+                                      : "bg-indigo-50/20"
                                   }`}
                                 >
                                   {Object.entries(row).map(([key, val]) => {
@@ -2098,7 +2286,8 @@ export default function Dashboard() {
                                       formattedVal = safeFormatDate(val);
                                     } else if (typeof val === "number") {
                                       // Enhanced formatting: Use formatNumber for consistency
-                                      const isCurrency = key.toLowerCase().includes("dollar") ||
+                                      const isCurrency =
+                                        key.toLowerCase().includes("dollar") ||
                                         key.toLowerCase().includes("amount") ||
                                         key.toLowerCase().includes("cost") ||
                                         key.toLowerCase().includes("spend") ||
@@ -2107,10 +2296,16 @@ export default function Dashboard() {
                                         key.toLowerCase().includes("expense");
                                       formattedVal = formatNumber(val, {
                                         prefix: isCurrency ? "₹" : "",
-                                        decimals: key.toLowerCase().includes("lat") ||
-                                          key.toLowerCase().includes("lon") ? 6 :
-                                          key.toLowerCase().includes("count") ||
-                                          key.toLowerCase().includes("id") ? 0 : 2,
+                                        decimals:
+                                          key.toLowerCase().includes("lat") ||
+                                          key.toLowerCase().includes("lon")
+                                            ? 6
+                                            : key
+                                                .toLowerCase()
+                                                .includes("count") ||
+                                              key.toLowerCase().includes("id")
+                                            ? 0
+                                            : 2,
                                         currency: isCurrency,
                                       });
                                     } else if (typeof val === "string") {
@@ -2125,7 +2320,9 @@ export default function Dashboard() {
                                         const num = parseFloat(val);
                                         formattedVal = isNaN(num)
                                           ? val
-                                          : `${formatNumber(num, { decimals: 2 })}%`;
+                                          : `${formatNumber(num, {
+                                              decimals: 2,
+                                            })}%`;
                                       } else {
                                         formattedVal = val;
                                       }

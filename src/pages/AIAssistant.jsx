@@ -59,7 +59,7 @@ function formatTooltipValue(v) {
   }
   return String(v);
 }
-function renderAnswer(text) {
+function renderAnswer(text, textClass = "text-slate-700 leading-relaxed") {
   if (!text) return null;
   const lines = text.split('\n').filter(l => l.trim());
   const hasBullets = lines.some(l => l.trim().startsWith('- ') || l.trim().startsWith('* '));
@@ -67,14 +67,14 @@ function renderAnswer(text) {
     return (
       <ul className="space-y-2 ml-4 list-disc list-inside">
         {lines.map((line, i) => (
-          <li key={i} className="text-slate-700 leading-relaxed">
+          <li key={i} className={textClass}>
             {line.replace(/^- |\*- /, '').trim()}
           </li>
         ))}
       </ul>
     );
   }
-  return <p className="text-slate-700 leading-relaxed">{text}</p>;
+  return <p className={textClass}>{text}</p>;
 }
 function inferConfig(chart) {
   const data = chart.data || [];
@@ -523,13 +523,13 @@ function ExecutiveSummary({ summary }) {
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-300/10 to-purple-300/10" />
       <div className="relative p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-lg flex items-center justify-center shadow-lg">
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-300 to-purple-100 rounded-lg flex items-center justify-center shadow-lg">
             <SparklesIcon className="h-6 w-6 text-white" />
           </div>
           <h4 className="text-xl font-bold text-white">Executive Summary</h4>
         </div>
-        <div className="text-indigo-100 leading-relaxed text-base">
-          {renderAnswer(summary)}
+        <div className="leading-relaxed text-base">
+          {renderAnswer(summary, "text-white leading-relaxed")}
         </div>
       </div>
     </motion.div>
@@ -568,7 +568,7 @@ function KeyInsights({ insights }) {
         <ChartBarIcon className="h-6 w-6 text-indigo-600" />
         Key Insights
       </motion.h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div className="w-full">
         <AnimatePresence>
           {insights.map((insight, idx) => (
             <motion.div

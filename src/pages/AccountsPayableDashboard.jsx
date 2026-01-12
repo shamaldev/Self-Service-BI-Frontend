@@ -1641,51 +1641,8 @@ const AccountsPayableDashboard = () => {
       {/* Compact Tab Navigation */}
       {/* Filter button group removed as requested */}
       {/* KPI cards - render dynamically from runtime data1.kpi_cards */}
-      <section className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          {(data1.kpi_cards && data1.kpi_cards.length > 0) ? (
-            data1.kpi_cards.map((kpi, i) => {
-              const title = kpi.title || kpi.raw_data?.title || `KPI ${i + 1}`;
-              const value = kpi.formatted_value || (typeof kpi.value !== 'undefined' ? String(kpi.value) : "—");
-              const detail = kpi.detail_line || kpi.description || "";
-              const comparisonLabel = kpi.comparison_label || kpi.raw_data?.comparison_label;
-              const comparisonValue = kpi.comparison_value || kpi.raw_data?.comparison_value;
-              const status = (kpi.status || kpi.raw_data?.status || "unknown").toLowerCase();
-              let statusClass = "bg-yellow-100 text-yellow-800"; // default (warning)
-              if (status === "success" || status === "low") statusClass = "bg-green-100 text-green-800";
-              if (status === "warning" || status === "medium") statusClass = "bg-yellow-100 text-yellow-800";
-              if (status === "danger" || status === "critical" || status === "error") statusClass = "bg-red-100 text-red-800";
-              return (
-                <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 p-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</div>
-                    <div className="text-lg font-bold text-indigo-600">{value}</div>
-                  </div>
-                  {detail && <div className="mt-3 text-xs text-gray-400">{detail}</div>}
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className={`inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs font-semibold ${statusClass}`}>{status.toUpperCase()}</div>
-                    {comparisonLabel && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {comparisonValue !== undefined ? `${comparisonLabel}: ${String(comparisonValue)}` : comparisonLabel}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            // Fallback: show simple empty placeholders when no KPI data
-            [1,2,3,4,5,6].map((i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 p-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">KPI {i}</div>
-                  <div className="text-lg font-bold text-indigo-600">—</div>
-                </div>
-                <div className="mt-3 text-xs text-gray-400">No KPI data</div>
-              </div>
-            ))
-          )}
-        </div>
+    {  <section className="max-w-7xl mx-auto px-4 py-6">
+      
 
         {/* New Widgets Section */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
@@ -1750,7 +1707,7 @@ const AccountsPayableDashboard = () => {
           />
           {/* <ActionRequiredWidget /> */}
         </div>
-      </section>
+      </section>}
 
       
       {/* Error State - Compact */}

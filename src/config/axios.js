@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 
 // Create axios instance with custom config
 const axiosInstance = axios.create({
-    baseURL: 'https://somehow-alarm-arrives-basement.trycloudflare.com/api/v1',
+    baseURL: 'https://34.44.209.178/api/v1',
     timeout: 30000, // 30 seconds
     headers: {
         'Content-Type': 'application/json'
